@@ -116,11 +116,11 @@ class WaveOverlay(threading.Thread):
             bars_items = []
             for i in range(BARS):
                 bx = x0 + i * (bw + gap)
-                # 圆头竖条 = 一个矩形 + 上下两个半圆（border-radius 2px = 宽度一半）
-                body = canvas.create_rectangle(bx, mid, bx + bw, mid, fill=accent, outline="")
-                top = canvas.create_oval(bx, mid, bx + bw, mid, fill=accent, outline="")
-                bot = canvas.create_oval(bx, mid, bx + bw, mid, fill=accent, outline="")
-                bars_items.append((bx, body, top, bot))
+                # 竖条就是长方形（不要圆角）
+                rect = canvas.create_rectangle(
+                    bx, mid - int(BAR_MIN * k), bx + bw, mid + int(BAR_MIN * k),
+                    fill=accent, outline="")
+                bars_items.append((bx, rect))
 
             win.deiconify()
             self._root = root
@@ -135,16 +135,11 @@ class WaveOverlay(threading.Thread):
             opened = time.time()
 
             def place(i: int, height: float, fill: str) -> None:
-                bx, body, top, bot = bars_items[i]
-                half = max(height / 2.0, bw / 2.0)
-                y0 = mid - half
-                y1 = mid + half
-                canvas.coords(body, bx, y0 + bw / 2.0, bx + bw, y1 - bw / 2.0)
-                canvas.coords(top, bx, y0, bx + bw, y0 + bw)
-                canvas.coords(bot, bx, y1 - bw, bx + bw, y1)
-                if canvas.itemcget(body, "fill") != fill:
-                    for item in (body, top, bot):
-                        canvas.itemconfigure(item, fill=fill)
+                bx, rect = bars_items[i]
+                half = max(height / 2.0, 1.0)
+                canvas.coords(rect, bx, mid - half, bx + bw, mid + half)
+                if canvas.itemcget(rect, "fill") != fill:
+                    canvas.itemconfigure(rect, fill=fill)
 
             def tick() -> None:
                 nonlocal shown, opened
