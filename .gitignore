@@ -1,8 +1,14 @@
-# 打包产物 / 中间文件（都能重新生成，不要进仓库）
+# Regeneratable build output (rebuild with the commands in README.md)
 dist*/
 build/
+pc/
 CrossLink-PC-win64/
+TypeBridge-PC-win64/
 CrossLink-ondir/
+TypeBridge-ondir/
+*.spec
+
+# Older Chinese-named folders kept on disk only (not part of the repo)
 电脑端/
 发布包/
 源码/
@@ -10,9 +16,10 @@ CrossLink-ondir/
 preview/
 reference/
 旧单文件版*.exe
+
+# Old packaged exe names
 CrossLink-PC.exe
 CrossLink-ondir.exe
-*.spec
 
 # Python
 __pycache__/
@@ -25,13 +32,13 @@ venv/
 local.properties
 *.apk.idsig
 
-# 编辑器 / 系统
+# Editors / OS
 .idea/
 .vscode/
 .DS_Store
 Thumbs.db
 
-# 本地配置、日志
+# Local runtime data
 config.json
 crash.txt
 *.log

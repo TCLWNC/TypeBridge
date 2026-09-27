@@ -1,224 +1,230 @@
-# CrossLink · 跨屏输入
+# TypeBridge — Cross-Screen Input (跨屏输入)
 
-手机当电脑的无线键盘：手机上打完字，字**直接出现在电脑当前光标所在的程序**里
-（记事本、Word、微信、浏览器、IDE……）。中文、emoji、回车、退格、方向键、Ctrl 组合键都能用。
+**跨屏输入**：手机当电脑的无线键盘。
+Type on your phone and the text appears in whatever window has focus on the PC
+(Notepad, Word, a browser, an IDE…). Chinese, English, emoji, Enter, Backspace,
+arrow keys and Ctrl shortcuts all work.
 
-界面按 LocalSend 的做法来（深色底 + 蓝色主色、圆润卡片、克制的过场动效）。
-其中底色 `#000000`、卡片 `#1A1B21`、主色 `#B4C5FF`、分隔线 `#414659`
-是从本机 LocalSend 窗口截图里逐个量出来的；`#00AEFA` 是本程序自己补的强调色。
+The app is bilingual — **English and 中文**, switchable in Settings.
+Product name: **TypeBridge** in English, **跨屏输入** in Chinese.
 
 ---
 
-## 下载（发布版）
+## Download
 
-| 端 | 文件 | 说明 |
+Files are attached to the release page: <https://github.com/TCLWNC/TypeBridge/releases>
+
+| Platform | File | Notes |
 | --- | --- | --- |
-| 手机 | `CrossLink-1.0.3-android.apk` | 安卓 8.0 及以上，直接安装 |
-| 电脑 | `CrossLink-1.0.0-release.zip` | Windows 免安装程序 + 两端全部源码 + 文档 |
+| Phone | `TypeBridge-1.0.3-android.apk` | Android 8.0+ (minSdk 26), install directly |
+| PC | `TypeBridge-1.0.0-release.zip` | Windows app + full source of both ends + docs |
 
-发布页：<https://github.com/TCLWNC/CrossLink/releases/tag/v1.0.0>
+The PC app is **portable**: unzip anywhere and run `TypeBridge-PC.exe`. No installer, no Python.
 
-> 版本号说明：电脑端 `1.0.0`、安卓端 `1.0.3`——两端独立迭代，号不一样是正常的。
+> Version numbers differ on purpose — the PC side is `1.0.0`, the Android side is `1.0.3`.
 
 ---
 
-## 一、三步开始用
+## Quick start
 
-| 步骤 | 做什么 |
+| Step | What to do |
 | --- | --- |
-| 1 | 电脑上双击 **`启动 CrossLink.bat`**（或直接双击 `CrossLink-PC.exe`） |
-| 2 | 手机装 **`CrossLink-1.0.3-android.apk`**，连**同一个 Wi-Fi**（也可以不装 App：用相机/微信扫电脑窗口左边的二维码，直接在浏览器里用） |
-| 3 | 在电脑上点一下要输入的程序（比如记事本的光标），然后在手机上打字 |
+| 1 | On the PC, double-click **`Start-TypeBridge.bat`** (or run `TypeBridge-PC.exe`) |
+| 2 | On the phone, install the APK and join the **same Wi-Fi**. (No app? Scan the QR code in the PC window and use the phone browser instead.) |
+| 3 | Click into the program you want to type into on the PC (e.g. put the caret in Notepad) |
+| 4 | Type on the phone — the text appears on the PC as you type |
 
-> 手机端两条路都留着：**装 App**（功能最全：设备列表自动发现、连接过场动画、配对码弹窗）
-> 或者**直接用手机浏览器打开**电脑给的网址（不装任何东西）。同网段默认免配对码，
-> 想更安全就在电脑端设置里打开「需要配对码」。
->
-> 安卓端已在真机 **vivo V2162A（Android）** 上逐项实测：设备列表能搜到电脑、连上后打字实时同步、
-> 点「输入」后手机输入框清空、点「恢复」能把上一次发送的内容找回来、杀掉 App 后电脑端 5.5 秒内把设备移除。
-
-第一次手机连不上，99% 是 Windows 防火墙：
-点电脑窗口右上角 **「放行防火墙」**（或右键运行 `放行防火墙(管理员运行).bat`），
-在弹出的管理员确认里点「是」即可。撤销用 `删除防火墙规则.bat`。
+The first run asks for administrator rights once: click **Yes** so the app can open inbound
+ports `8788-8800`. Without that, phones cannot find the computer.
 
 ---
 
-## 二、电脑端界面
+## Features
 
-```
-┌ 跨屏输入 ───────────────────────────────────────────── ● 已连接 1 台 ┐
-│ 输入 │  ┌ 手机扫码即可用 ─────────────┐ ┌ 输入目标 ─────────────┐ │
-│ 设备 │  │  [二维码]  不用装 App…      │ │ 微信 · WeChat.exe     │ │
-│ 设置 │  │  http://192.168.1.5:8788    │ │ [就绪 · 可以打字]      │ │
-│      │  │  配对码 7 3 6 4  [换一个]   │ │ 已输入 128 字 / 1 台   │ │
-│      │  └────────────────────────────┘ └──────────────────────┘ │
-│      │  ┌ 输入记录 ────────────────────────────────────────────┐ │
-│      │  │ 18:02 我的手机  你好世界                            │ │
-├──────┴───────────────────────────────────────────────────────┴─┤
-│ ● 已连接 1 台 · 我的手机      输入方式 [直接输入|剪贴板] 延迟 0ms │
-└────────────────────────────────────────────────────────────────┘
-```
+**PC side (Python, `crosslink/`)**
 
-- **左侧导航**：输入（连接与记录）／设备／设置，切换有淡入上移的过场。
-- **输入目标**：实时显示当前会打字给哪个窗口；显示「⚠ 本程序窗口」时先点一下目标程序。
-- **输入方式**：
-  - `直接输入`（默认）：Windows Unicode 注入，最快，不碰剪贴板；
-  - `剪贴板粘贴`：写剪贴板再按 Ctrl+V，个别程序（远程桌面、Java 程序）用这个更稳。
-- **字间延迟**：默认 0；老程序吞字时调到 5～20 毫秒。
-- **关闭按钮**：默认最小化到托盘，托盘右键可以显示窗口／复制链接／开关注入／退出。
+- HTTP + SSE server (default port `8788`; moves up automatically when the port is taken)
+- Device discovery over UDP broadcast, plus a subnet-scan fallback
+- Three ways to show the UI: embedded window (default), system browser (`--browser`),
+  or tray-only with no window (`--tray`)
+- Closing the window keeps it in the tray. Tray menu: Show window / Copy phone link /
+  Keyboard injection on-off / Quit
+- Injects received text into the focused window with Windows `SendInput` (Unicode), or
+  optionally by clipboard paste for apps that ignore Unicode injection
 
----
+**Phone side (Kotlin, native Android views)**
 
-## 三、手机端界面
-
-```
-┌──────────────────────────────┐
-│ [PC]  我的电脑     ● 已连接   │
-│ 电脑已就绪：记事本 - 无标题    │
-│ ┌──────────────────────────┐ │
-│ │ 在这里打字…               │ │
-│ │                    12 字 │ │
-│ └──────────────────────────┘ │
-│ [⌫][⏎][Tab][Esc][←][↑][↓][→][行首][行尾][全选][复制][粘贴][撤销]… │
-│      [ 即打即输 | 编辑后发送 ]  │
-│  [清空]  [还原]   [ 发送到电脑 ] │
-└──────────────────────────────┘
-```
-
-- **即打即输**（默认）：每打一个字电脑上立刻出现；手机上退格，电脑同步退格。
-  输入法选词过程中的候选不会发过去，只有确认的字才发。
-- **编辑后发送**：先在手机上写好、改好，再一次性发到电脑，适合长文本。
-- **清空**：只清手机上的输入框，**不动电脑里的内容**。
-- **还原**：把最近一次发送的内容放回输入框，方便改完再发。
-- 功能键：退格、回车、Tab、Esc、方向键、行首行尾、全选/复制/粘贴/剪切/撤销/保存、Alt+Tab 切换窗口。
+- Bottom navigation: Send (device list) / Logs / Settings
+- Finds the PC two ways: UDP broadcast discovery + HTTP scan of your /24 subnet
+- Typing page with Delete / Restore / Enter, a live character counter and a status line
+- Tapping **Enter** sends the key and clears the phone input box; the PC keeps the text.
+  **Restore** brings the last sent text back so you can fix a typo and send again
+- Optional 4-digit pairing code for new phones (custom rounded dialog, auto-connect at 4 digits)
+- Connection animation when a device is picked; a phone that is killed or swiped away
+  disappears from the PC device list within about 6 seconds
 
 ---
 
-## 四、它是怎么工作的
+## How it works
 
 ```
- 手机浏览器（网页）                 电脑端（CrossLink-PC.exe）
- ┌────────────────────┐            ┌──────────────────────────────┐
- │ 扫码打开 http://…  │            │ HTTP 服务（默认 8788 端口）    │
- │ 打字 → 算出差异     │ ──POST──►  │ 指令队列（单线程顺序执行）      │
- │ 事件流 SSE 实时回传 │ ◄──SSE───  │ Windows SendInput 注入键盘     │
- └────────────────────┘            └──────────────────────────────┘
+   Phone (app or browser)                 PC (TypeBridge-PC.exe)
+ ┌────────────────────┐                 ┌──────────────────────────────┐
+ │ type text          │ ──POST /api/op─►│ command queue (single thread) │
+ │ whole text, 250 ms │                 │ SendInput → focused window    │
+ │ device list        │ ◄──SSE──────────│ /api/events: state, devices   │
+ └────────────────────┘                 └──────────────────────────────┘
+            ▲                                        │
+            └──────── UDP broadcast discovery ────────┘
 ```
 
-接口（都是 JSON）：
+The phone sends the **whole text** of its input box (debounced by 250 ms) instead of
+character deltas; the PC then makes the target window match that text. This avoids the
+misplaced-character problems delta algorithms cause when the caret moves.
 
-| 方向 | 接口 | 说明 |
+HTTP API (JSON):
+
+| Direction | Endpoint | Purpose |
 | --- | --- | --- |
-| 手机 → 电脑 | `POST /api/hello` | 报上设备名（可选配对码），拿到会话 id |
-| 手机 → 电脑 | `POST /api/op` | `edit` 退格+补字 / `insert` 整段 / `key` 功能键 / `combo` 组合键 |
-| 电脑 → 两端 | `GET /api/events` | SSE：状态、设备、记录、前台窗口、设置变更 |
-| 电脑 → 手机 | `GET /api/qr.png` | 连接二维码 |
-| 本机 UI | `POST /api/pc/*` | 改设置、换配对码、断开设备、放行防火墙、退出（仅本机可调用） |
+| Phone → PC | `POST /api/hello` | Register the device (optional pairing code), returns a session id |
+| Phone → PC | `POST /api/op` | `sync` whole text / `key` a key / `combo` a shortcut / `ping` heartbeat / `bye` goodbye |
+| PC → both | `GET /api/events` | SSE stream: state, devices, logs, focused window, setting changes |
+| Phone → PC | `GET /api/state` | One-shot state (used by the subnet scan fallback) |
+| PC → phone | `GET /api/qr.png` | QR code that opens the phone web UI |
+| Local UI | `POST /api/pc/*` | Settings, roll the pairing code, disconnect a device, allow firewall, quit (localhost only) |
 
-手机端的同步算法：把「手机上已确认的文字」和上次发出去的比对，算出**退几格 + 补什么**，
-合成一条 `edit` 指令。末尾打字/删字完全一致；中间改动会被翻译成「删掉后面重打」，
-一次最多补发 200 个退格，避免误操作把电脑上的内容删一大片。
-
----
-
-## 五、命令行参数
+Discovery protocol (UDP, same port as HTTP):
 
 ```
-CrossLink-PC.exe                  打开界面（默认）
-CrossLink-PC.exe --tray           静默常驻托盘（开机自启用它）
-CrossLink-PC.exe --headless       只跑服务，不开窗口
-CrossLink-PC.exe --selftest       自检，报告写到 %APPDATA%\CrossLink\自检报告.txt
-CrossLink-PC.exe --port 9000      换端口（默认 8788）
-CrossLink-PC.exe --name "书房台式机"  换电脑名（手机上显示的名字）
-CrossLink-PC.exe --pin 2468       固定配对码
-CrossLink-PC.exe --no-pin         关闭配对码校验
-CrossLink-PC.exe --no-inject      只接收不注入（调试用）
+phone  → broadcast  "CROSSLINK?"
+PC     → unicast    {"t":"crosslink","v":1,"name":"MY-PC","port":8788,
+                     "pin":false,"version":"1.0.0","id":"..."}
 ```
 
 ---
 
-## 六、常见问题
+## Settings worth knowing
 
-**手机扫不出/连不上**
-1. 手机和电脑是不是同一个 Wi-Fi？手机流量没关、路由器开了「AP 隔离/访客网络」都会连不上；
-2. 防火墙没放行 → 点窗口右上角「放行防火墙」；
-3. 多个网卡/VPN → 二维码里的地址取自最可能是家用网段的那张网卡，实在不行在手机浏览器手动输入 `http://电脑IP:8788/m`。
-
-**手机能连上，但电脑上没反应**
-- 看「输入目标」卡片：显示「⚠ 本程序窗口」说明焦点还在 CrossLink 自己身上，点一下目标程序；
-- 目标是管理员权限的程序（任务管理器、部分游戏）时，把 `CrossLink-PC.exe` 也用管理员身份运行；
-- 某些程序不吃 Unicode 注入 → 把输入方式切到「剪贴板粘贴」；
-- 老程序吞字 → 字间延迟调到 5～20 毫秒；
-- 锁屏或远程桌面断开时注入会失败，记录里会提示。
-
-**端口被占用**：程序会自动往后找空端口（8788 → 8789 …），二维码里的地址自动跟着变。
+- **Injection method** — `Direct` (default, fastest, never touches the clipboard) or
+  `Clipboard paste` (Ctrl+V; more reliable for RDP sessions and some Java apps).
+- **Inter-character delay** — default 0 ms; raise to 5–20 ms for old programs that drop keys.
+- **Topmost** — keep the window above everything else.
+- **Run at login / Tray** — close-button behavior and Windows startup.
+- **Require pairing code** — when on, a new phone must enter the 4-digit code shown in the PC window.
+- **Language** — switch the interface between English and 中文.
 
 ---
 
-## 七、文件清单
+## Command-line flags
 
-| 文件 | 说明 |
+```
+TypeBridge-PC.exe                     open the UI (default)
+TypeBridge-PC.exe --tray              stay in the tray, window hidden (use this at login)
+TypeBridge-PC.exe --browser           run the UI in your default browser
+TypeBridge-PC.exe --headless          server only, no window and no tray
+TypeBridge-PC.exe --selftest          self-test; writes a report next to the config
+TypeBridge-PC.exe --port 9000         use a different port (default 8788)
+TypeBridge-PC.exe --name "Office-PC"  change the name phones see
+TypeBridge-PC.exe --pin 2468          fix the pairing code
+TypeBridge-PC.exe --no-pin            disable pairing code checking
+TypeBridge-PC.exe --no-inject         receive but do not type (debugging)
+TypeBridge-PC.exe --native            use the tkinter UI instead of the web UI
+TypeBridge-PC.exe --qt                use the Qt UI instead of the web UI
+```
+
+Config lives in `%APPDATA%\CrossLink\config.json`.
+
+---
+
+## Troubleshooting
+
+**The phone cannot find the PC**
+
+1. Both on the same Wi-Fi? Mobile data being on, or a router with "AP isolation" or a guest
+   network, blocks discovery.
+2. Windows Firewall not opened yet → click **Allow firewall** in the PC window
+   (or run `Allow-Firewall-AsAdmin.bat`).
+3. VPN or several network adapters → type the address manually on the phone's Settings tab,
+   e.g. `192.168.1.20:8788`.
+
+**Connected, but nothing is typed on the PC**
+
+- Check the **Input target** card. If it points at the TypeBridge window itself, click into
+  the program you actually want to type into.
+- The target runs as administrator (Task Manager, some games) → run `TypeBridge-PC.exe`
+  as administrator too.
+- The target ignores Unicode injection → switch the method to **Clipboard paste**.
+- An old program drops characters → set the inter-character delay to 5–20 ms.
+- Injection also fails while the PC is locked or an RDP session is disconnected.
+
+**Port already in use** — the app moves to the next free port (`8788 → 8789 …`) and the
+address in the window and QR code follows automatically.
+
+---
+
+## Repository layout
+
+| Path | What it is |
 | --- | --- |
-| `CrossLink-PC-win64\CrossLink-PC.exe` | 电脑端程序（**onedir 版**，免安装、免装 Python，双击即用；必须整个文件夹一起拷走） |
-| `CrossLink.apk` | 安卓端安装包（1.3 MB，Android 8.0+），装完可直接「搜索电脑」 |
-| `启动 CrossLink.bat` | 双击启动（指向 `CrossLink-PC-win64\CrossLink-PC.exe`） |
-| `放行防火墙(管理员运行).bat` | 手机连不上时运行一次 |
-| `删除防火墙规则.bat` | 撤销上面加的规则 |
-| `main.py` + `crosslink/` | 完整源码（Python 3.10+，纯标准库 + pywebview/pystray/qrcode/Pillow） |
-| `preview/pc.png`、`preview/mobile.png` | 两端界面预览 |
-| `dist-onedir/` | 打包产物（`CrossLink-PC-win64` 由它拷来） |
+| `crosslink/` | PC source (Python 3.10+, standard library + pywebview/pystray/qrcode/Pillow) |
+| `main.py` | PC entry point |
+| `android/` | Android source (Kotlin, native views, Gradle project) |
+| `apk/` | Built Android package |
+| `Start-TypeBridge.bat` | Double-click to start with a window |
+| `Start-TypeBridge-Tray.bat` | Start hidden in the tray (for Windows startup) |
+| `Allow-Firewall-AsAdmin.bat` | Open inbound ports `8788-8800` (asks for admin once) |
+| `Remove-Firewall-Rules.bat` | Undo the firewall rules |
+| `FILES.md` | Every file explained |
+| `HOW-TO-PUSH.md` | How this repo is wired to GitHub and how to push |
 
-> **为什么要用 onedir 而不是单文件 exe**：实测单文件（onefile）打包会让 WebView2 的 .NET 初始化卡住，
-> 窗口出现后不响应任何点击、被系统标记「(未响应)」；改成 onedir（依赖落在磁盘上）后实测 36 秒采样
-> **0 次未响应**。所以不要再发单文件版本。
-
----
-
-## 九、安卓端
-
-`CrossLink.apk` 是原生安卓客户端（Kotlin + 原生 View，不依赖 Compose），打开后：
-
-- 点 **「搜索电脑」** → 手机在局域网里广播一句探测，电脑端回一句身份信息，
-  列表里就会显示电脑名和地址，点「连接」直接连上（电脑开了配对码会提示输入）。
-- 搜不到时也可以手动填地址（电脑窗口上显示的 `192.168.1.x:8788`）。
-
-发现协议（UDP，和网页服务同一个端口）：
-
-```
-手机 → 广播  CROSSLINK?
-电脑 → 单播  {"t":"crosslink","v":1,"name":"我的电脑","port":8788,
-              "pin":false,"version":"1.0.0","id":"..."}
-```
-
-电脑端启动时会打印 `✔ 设备发现已监听 UDP 8788`；手机搜不到时，
-先在电脑上点一次「放行防火墙」（规则里同时放行了 TCP 和 UDP）。
+Regeneratable build output (`dist-*/`, the packaged `_internal/` folder, ~200 MB) is
+intentionally not committed.
 
 ---
 
-## 八、这次实际验证了什么（逐条可复现）
+## Build from source
 
-| 验证项 | 方法 | 结果 |
-| --- | --- | --- |
-| 整段中文注入 | 模拟手机发 `insert`，读回目标窗口文本 | ✔ `你好，跨屏输入` 完全一致 |
-| 即打即输（退格+补字） | 发 `edit del=2 ins=世界` | ✔ `你好，跨屏世界` |
-| 回车 / 功能键 / 组合键 | `key ENTER`、`BACKSPACE ×4`、`combo Ctrl+A` | ✔ 全部一致 |
-| emoji 与重音字符 | 发 `A1 😀 é` | ✔ 一致 |
-| 打包后的 EXE 同样能打字 | 对 `CrossLink-PC.exe --headless` 重跑上面全部用例 | ✔ 全部通过 |
-| 二维码 | `GET /api/qr.png` | ✔ 返回 589 字节有效 PNG |
-| 两端排版（无文字重叠/无溢出） | 遍历所有元素矩形做溢出与相交检测 | ✔ 0 个问题（电脑端 1106×723、手机端 386×823） |
-| 动效 | 逐帧采样 computed style | ✔ 页面切换 380ms：透明度 0→0.42→0.59→0.76→1，位移 14→8.1→5.7→3.4→0 px；涟漪按压 `pressing=true`、抬起 `rippling=true`；卡片过渡 220ms；缓动 `cubic-bezier(.05,.7,.1,1)` |
-| 自检报告 | `CrossLink-PC.exe --selftest` | ✔ 生成 `%APPDATA%\CrossLink\自检报告.txt`（唯一 ✘ 是防火墙未放行，属预期，点一次「放行防火墙」即可） |
+**PC**
 
-未包含：安卓 APK（手机端走浏览器，不需要装包）；多设备同时输入会按到达顺序排队注入，
-没有做「每个设备各自独立的光标位置」这种复杂模型。
-
-重新打包（在 `outputs/CrossLink` 目录）：
-
+```powershell
+pip install pywebview pystray qrcode pillow pyinstaller
+python -m PyInstaller --noconfirm --onedir --windowed --name TypeBridge-PC `
+  --icon crosslink\assets\icon.ico `
+  --add-data "crosslink\web;crosslink\web" `
+  --add-data "crosslink\assets;crosslink\assets" `
+  --hidden-import qrcode.image.pil --hidden-import crosslink.qtui --hidden-import crosslink.native main.py
 ```
-py -m pip install pywebview pystray qrcode pillow pyinstaller
-py -m PyInstaller --noconfirm --onefile --windowed --name CrossLink ^
-  --icon crosslink\assets\icon.ico ^
-  --add-data "crosslink\web;crosslink\web" ^
-  --add-data "crosslink\assets;crosslink\assets" ^
-  --hidden-import qrcode.image.pil main.py
+
+Use `--onedir`, not `--onefile`: a single-file build makes WebView2's .NET initialization
+stall — the window appears and then ignores every click (Windows marks it "Not Responding").
+With `--onedir` the same sampling showed **0 unresponsive events over 36 seconds**.
+
+**Android**
+
+```bash
+cd android
+gradle assembleDebug        # needs JDK 17 + Android SDK 34
 ```
+
+---
+
+## What has actually been verified
+
+Measured on real hardware during development, not estimated:
+
+| Check | Result |
+| --- | --- |
+| Android device discovery | Phone finds the PC on the same Wi-Fi (UDP broadcast); list shows name + address |
+| Live typing | Text typed on the phone appears in the PC's focused window while typing |
+| Enter button clears the phone box | On device: box returns to the placeholder, counter back to 0, PC keeps the text |
+| Restore button | On device: the last sent text comes back into the box |
+| Phone killed / swiped away | PC device list clears in **5.5 s** |
+| PC responsiveness | `/api/state` answers in **~4 ms**; no pywebview error storm |
+| Pairing-code dialog | Custom rounded dialog, auto-connects at 4 digits, shakes on short input |
+| Chinese input | Whole Chinese sentences arrive identical in the target window |
+| Emoji / accented characters | Identical |
+
+Known limitations:
+
+- Multiple phones are injected in arrival order; there is no per-device caret model.
+- The app talks plain HTTP inside your LAN; do not expose it to the internet.
