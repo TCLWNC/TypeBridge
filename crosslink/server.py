@@ -196,7 +196,8 @@ class Hub:
         """收音时屏幕上的声纹浮层；第一次用到才建窗口。"""
         if self.overlay is None:
             from .overlay import WaveOverlay
-            self.overlay = WaveOverlay(level=lambda: self.voice.level,
+            # 传频谱（16 段）给声纹，画出来才是"跟着说话起伏"的波形
+            self.overlay = WaveOverlay(bars=lambda: self.voice.bars,
                                        log=lambda t: self.log("电脑", t, "warn"))
             self.overlay.start()
         return self.overlay

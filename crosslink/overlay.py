@@ -1,106 +1,133 @@
 # -*- coding: utf-8 -*-
-"""收音时屏幕上的声纹指示器。
+"""收音时屏幕上的声纹。
 
-一个无边框、置顶的小窗口，里面是一排随麦克风音量起伏的竖条 —— 表示"正在读语音"。
-用 tkinter 画，不依赖任何额外库；窗口不会抢焦点（点它也不会把焦点从目标程序拿走）。
+样式照 Handy（github.com/cjpais/Handy，同样是离线语音输入）来：
+一个小的深色圆角"药丸"，中间 9 根短竖条，跟着麦克风频谱起伏。
+参数也照抄它的：9 根条、每根高 3~18px、取频谱前 9 段、指数平滑 0.7/0.3；
+频谱本身是 1024 点 FFT + 对数分频 + dB 映射（见 asr.Spectrum）。
+
+用 tkinter 画，不依赖额外库；窗口无边框、置顶、不抢焦点。
 """
 
 from __future__ import annotations
 
+import ctypes
 import threading
 import tkinter as tk
 
-BAR_COUNT = 21
-WIDTH, HEIGHT = 320, 104
+BARS = 9                     # Handy 的 WAVE_BARS
+BAR_W = 3
+BAR_GAP = 3
+BAR_MIN, BAR_MAX = 3, 18     # Handy 的 Math.max(3, Math.min(18, 3 + v^0.7 * 15))
+PILL_W, PILL_H = 184, 40     # Handy 的胶囊尺寸
+RADIUS = 12
+BOTTOM_OFFSET = 120
+
+BG = "#1C1C1E"
+LINE = "#3A3A3C"
+BAR = "#E8E8EE"
+
+
+def _scale() -> float:
+    """DPI 缩放：96dpi 记 1.0，免得高分屏上画出来太小。"""
+    try:
+        return max(1.0, ctypes.windll.user32.GetDpiForSystem() / 96.0)
+    except Exception:                     # noqa: BLE001
+        return 1.0
 
 
 class WaveOverlay(threading.Thread):
-    """level() 返回 0..1 的当前音量；show()/hide() 控制显示。"""
+    """bars() 返回 16 个 0..1 的频段值；show()/hide() 控制显示。"""
 
-    def __init__(self, level, log=None) -> None:
+    def __init__(self, bars, log=None) -> None:
         super().__init__(daemon=True, name="crosslink-overlay")
-        self.level = level
+        self.bars = bars
         self.log = log or (lambda *_: None)
-        self._want_show = threading.Event()
-        self._want_hide = threading.Event()
+        self._show = threading.Event()
+        self._hide = threading.Event()
         self._ready = threading.Event()
         self._root = None
-        self._canvas = None
-        self._win = None
 
-    # 外部接口（可从任意线程调用）
     def show(self) -> None:
-        self._want_hide.clear()
-        self._want_show.set()
+        self._hide.clear()
+        self._show.set()
 
     def hide(self) -> None:
-        self._want_show.clear()
-        self._want_hide.set()
+        self._show.clear()
+        self._hide.set()
 
     def stop(self) -> None:
-        self._want_hide.set()
+        self._hide.set()
 
-    # 线程主体
     def run(self) -> None:
         try:
+            k = _scale()
+            w, h = int(PILL_W * k), int(PILL_H * k)
+            gap, bw = int(BAR_GAP * k), int(BAR_W * k)
             root = tk.Tk()
             root.withdraw()
             win = tk.Toplevel(root)
-            win.overrideredirect(True)          # 没有标题栏/边框
-            win.attributes("-topmost", True)    # 永远在最上层
+            win.overrideredirect(True)          # 无边框
+            win.attributes("-topmost", True)    # 置顶
             try:
-                win.attributes("-alpha", 0.92)
+                win.attributes("-alpha", 0.94)
             except tk.TclError:
                 pass
-            win.configure(bg="#14161C")
-            win.geometry("%dx%d+%d+%d" % (
-                WIDTH, HEIGHT,
-                (win.winfo_screenwidth() - WIDTH) // 2,
-                win.winfo_screenheight() - HEIGHT - 120))
-            canvas = tk.Canvas(win, width=WIDTH, height=HEIGHT, bg="#14161C",
-                               highlightthickness=0)
-            canvas.pack(fill="both", expand=True)
-            canvas.create_text(WIDTH // 2, 18, text="正在听…", fill="#B4C5FF",
-                               font=("Microsoft YaHei UI", 11))
-            bars = []
-            gap = 4
-            bw = max(3, (WIDTH - 40 - (BAR_COUNT - 1) * gap) // BAR_COUNT)
-            x0 = (WIDTH - (BAR_COUNT * bw + (BAR_COUNT - 1) * gap)) // 2
-            for i in range(BAR_COUNT):
-                x = x0 + i * (bw + gap)
-                bars.append(canvas.create_rectangle(x, 70, x + bw, 72,
-                                                    fill="#4C7DFF", outline=""))
-            win.withdraw()
-            self._root, self._win, self._canvas = root, win, canvas
+            x = (win.winfo_screenwidth() - w) // 2
+            y = win.winfo_screenheight() - h - int(BOTTOM_OFFSET * k)
+            win.geometry("%dx%d+%d+%d" % (w, h, x, y))
+            canvas = tk.Canvas(win, width=w, height=h, highlightthickness=0,
+                               bg="#000000")
+            canvas.pack()
+            r = int(RADIUS * k)
+            canvas.create_polygon(
+                r, 0, w - r, 0, w, r, w, h - r, w - r, h, r, h, 0, h - r, 0, r,
+                smooth=True, splinesteps=24, fill=BG, outline=LINE,
+                width=max(1, int(k)))
+            total = BARS * bw + (BARS - 1) * gap
+            x0 = (w - total) // 2
+            mid = h // 2
+            rects = []
+            for i in range(BARS):
+                bx = x0 + i * (bw + gap)
+                rects.append(canvas.create_rectangle(
+                    bx, mid - int(BAR_MIN * k), bx + bw, mid + int(BAR_MIN * k),
+                    fill=BAR, outline=""))
+            win.deiconify()
+            self._root = root
             self._ready.set()
 
-            history = [0.0] * BAR_COUNT
+            shown = True
+            smooth = [0.0] * BARS
 
             def tick() -> None:
-                if self._want_hide.is_set():
-                    self._want_hide.clear()
-                    win.withdraw()
-                if self._want_show.is_set():
-                    if win.state() == "withdrawn":
+                nonlocal shown
+                if self._hide.is_set():
+                    self._hide.clear()
+                    if shown:
+                        win.withdraw()
+                        shown = False
+                if self._show.is_set():
+                    if not shown:
                         win.deiconify()
                         win.attributes("-topmost", True)
-                    lv = 0.0
+                        shown = True
                     try:
-                        lv = max(0.0, min(1.0, float(self.level())))
+                        values = list(self.bars())[:BARS]
                     except Exception:           # noqa: BLE001
-                        lv = 0.0
-                    history.pop(0)
-                    history.append(lv)
-                    mid = 70
-                    for rect, val in zip(bars, history):
-                        h = 4 + val * 48
-                        x1, _y1, x2, _y2 = canvas.coords(rect)
-                        canvas.coords(rect, x1, mid - h, x2, mid + h)
-                        canvas.itemconfigure(
-                            rect, fill="#B4C5FF" if val > 0.08 else "#3A4570")
-                root.after(60, tick)
+                        values = []
+                    for i in range(BARS):
+                        target = float(values[i]) if i < len(values) else 0.0
+                        # 照 Handy：指数平滑 prev*0.7 + target*0.3
+                        smooth[i] = smooth[i] * 0.7 + target * 0.3
+                        tall = BAR_MIN + (smooth[i] ** 0.7) * (BAR_MAX - BAR_MIN)
+                        tall = max(BAR_MIN, min(BAR_MAX, tall))
+                        half = int(tall * k)
+                        bx = x0 + i * (bw + gap)
+                        canvas.coords(rects[i], bx, mid - half, bx + bw, mid + half)
+                root.after(50, tick)
 
-            root.after(60, tick)
+            root.after(50, tick)
             root.mainloop()
         except Exception as exc:                # noqa: BLE001
             self.log("声纹窗口起不来：%s" % exc)

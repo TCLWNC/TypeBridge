@@ -55,6 +55,75 @@ _recognizer = None
 _recognizer_lock = threading.Lock()
 
 
+class Spectrum:
+    """麦克风频谱：给"声纹"用，对齐 Handy 的做法。
+
+    把音频切成 1024 点的窗，做 FFT，按**对数间隔**分成 16 个频段，
+    每个频段取平均功率 → 转 dB → 映射到 0..1，再做一次跨频段平滑。
+    dB 区间是照 Handy 校准过的那组（-68 ~ -30 dB，增益 1.3，曲线 0.7），
+    这样说话时波形起伏明显，房间本底噪声又不会让波形乱抖。
+    """
+
+    WINDOW = 1024
+    BUCKETS = 16
+    F_MIN = 60.0
+    F_MAX = 7600.0
+    DB_MIN = -68.0
+    DB_MAX = -30.0
+    GAIN = 1.3
+    CURVE = 0.7
+
+    def __init__(self, sample_rate: int = SAMPLE_RATE) -> None:
+        import numpy as np
+
+        self.np = np
+        self.sample_rate = sample_rate
+        self.buffer = np.zeros(0, dtype="float32")
+        self.hann = 0.5 - 0.5 * np.cos(
+            2.0 * np.pi * np.arange(self.WINDOW) / self.WINDOW)
+        nyquist = sample_rate / 2.0
+        f_max = min(self.F_MAX, nyquist)
+        ranges = []
+        for b in range(self.BUCKETS):
+            start = (b / self.BUCKETS) ** 2          # 对数分频
+            end = ((b + 1) / self.BUCKETS) ** 2
+            f0 = self.F_MIN + (f_max - self.F_MIN) * start
+            f1 = self.F_MIN + (f_max - self.F_MIN) * end
+            i0 = int(f0 * self.WINDOW / sample_rate)
+            i1 = int(f1 * self.WINDOW / sample_rate)
+            if i1 <= i0:
+                i1 = i0 + 1
+            half = self.WINDOW // 2
+            ranges.append((min(i0, half), min(i1, half)))
+        self.ranges = ranges
+        self.values = [0.0] * self.BUCKETS
+
+    def feed(self, samples) -> list[float] | None:
+        np = self.np
+        self.buffer = np.concatenate([self.buffer, samples])
+        if self.buffer.size < self.WINDOW:
+            return None
+        chunk = self.buffer[:self.WINDOW]
+        self.buffer = self.buffer[self.WINDOW:]
+        chunk = (chunk - float(chunk.mean())) * self.hann
+        mag = np.abs(np.fft.rfft(chunk))
+        out = []
+        half = self.WINDOW // 2
+        for (i0, i1) in self.ranges:
+            if i0 >= half or i1 <= i0:
+                out.append(0.0)
+                continue
+            power = float(np.mean(mag[i0:i1] ** 2))
+            db = 20.0 * np.log10(np.sqrt(power) / self.WINDOW) if power > 1e-12 else -80.0
+            norm = min(max((db - self.DB_MIN) / (self.DB_MAX - self.DB_MIN), 0.0), 1.0)
+            out.append(min((norm * self.GAIN) ** self.CURVE, 1.0))
+        smoothed = list(out)
+        for i in range(1, len(out) - 1):
+            smoothed[i] = out[i] * 0.7 + out[i - 1] * 0.15 + out[i + 1] * 0.15
+        self.values = smoothed
+        return smoothed
+
+
 def recognizer():
     """第一次调用时加载模型（约 2 秒），之后复用。"""
     global _recognizer
@@ -135,6 +204,8 @@ class VoiceSession:
         self.recording = False
         # 实时音量（0..1），声纹窗口用它画波形
         self.level = 0.0
+        # 实时频谱（16 段），声纹画的就是这个
+        self.bars = [0.0] * Spectrum.BUCKETS
 
     # -- 对外 --------------------------------------------------------------
     def start(self) -> None:
@@ -180,6 +251,7 @@ class VoiceSession:
             silence = 0.0
             voiced = 0.0
             started = time.time()
+            spectrum = Spectrum(SAMPLE_RATE)
             with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="float32",
                                 blocksize=int(SAMPLE_RATE * block)) as stream:
                 self.log("🎤 开始收音…")
@@ -189,6 +261,9 @@ class VoiceSession:
                     chunks.append(mono.copy())
                     rms = float(np.sqrt(np.mean(mono ** 2)))
                     self.level = min(1.0, rms * 12.0)     # 给声纹用，顺手做个放大
+                    bars = spectrum.feed(mono)
+                    if bars is not None:
+                        self.bars = bars
                     if rms > 0.012:
                         voiced += block
                         silence = 0.0
