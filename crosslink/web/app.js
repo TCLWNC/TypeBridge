@@ -189,7 +189,32 @@
     return move;
   }
   const segs = [...document.querySelectorAll(".segmented")];
-  segs.forEach(initSegmented);
+  // #seg-lang 是语言切换，不是"输入方式"，别让通用分段控件把方法也一起改了
+  segs.filter((s) => s.id !== "seg-lang").forEach(initSegmented);
+
+  /* ---------------- 界面语言 ---------------- */
+  const segLang = $("seg-lang");
+  if (segLang) {
+    const buttons = [...segLang.querySelectorAll("button")];
+    const paint = (lang) => {
+      buttons.forEach((b) => b.classList.toggle("active", b.dataset.v === lang));
+      const active = segLang.querySelector("button.active") || buttons[0];
+      const thumb = segLang.querySelector(".thumb");
+      if (active && thumb) {
+        thumb.style.width = `${active.offsetWidth}px`;
+        thumb.style.transform = `translateX(${active.offsetLeft - 3}px)`;
+      }
+    };
+    buttons.forEach((b) => {
+      b.addEventListener("click", () => {
+        const lang = b.dataset.v;
+        paint(lang);
+        window.I18N && window.I18N.set(lang);
+        setSetting({ lang });
+      });
+    });
+    window.__paintLang = paint;
+  }
   function syncMethod(value) {
     segs.forEach((seg) => {
       seg.querySelectorAll("button").forEach((b) => {
@@ -401,6 +426,11 @@
     if (!state) return;
     gotState = true;
     maybeHideBoot();
+    // 界面语言：设置里选了就按选的，没选（""）就跟随浏览器语言
+    if (window.I18N) {
+      const lang = window.I18N.set(state.lang);
+      if (window.__paintLang) window.__paintLang(lang);
+    }
     if (state.app) {
       $("pc-name").textContent = state.app.name || "我的电脑";
       $("ver").textContent = "v" + state.app.version;

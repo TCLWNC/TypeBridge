@@ -99,6 +99,12 @@ class CrossLinkApp:
         self._target_cache = {"title": "", "app": "", "self": False}
 
     # -- 基础 --------------------------------------------------------------
+    def window_title(self) -> str:
+        """窗口标题：英文界面用 TypeBridge，中文界面用 跨屏输入。"""
+        if self.cfg.get("lang") == "en":
+            return "TypeBridge v%s · %s" % (VERSION, self.cfg["name"])
+        return "%s v%s · %s" % (APP_TITLE, VERSION, self.cfg["name"])
+
     def _log(self, text: str) -> None:
         stamp = time.strftime("%H:%M:%S")
         self.log_lines.append("%s  %s" % (stamp, text))
@@ -111,7 +117,7 @@ class CrossLinkApp:
             try:
                 # 不要写 self.window.on_top：那是从 HTTP 线程去动 WinForms 窗口，
                 # 跨线程同步等待会把界面消息循环卡成「(未响应)」。用 Win32 置顶即可。
-                hwnd = self._find_hwnd("%s v%s · %s" % (APP_TITLE, VERSION, self.cfg["name"]))
+                hwnd = self._find_hwnd(self.window_title())
                 if hwnd:
                     import ctypes
                     HWND_TOPMOST, HWND_NOTOPMOST = -1, -2
@@ -320,7 +326,7 @@ class CrossLinkApp:
         width, height = self.cfg.get("window") or [1120, 740]
         self.app_url = url
         self.window = webview.create_window(
-            "%s v%s · %s" % (APP_TITLE, VERSION, self.cfg["name"]),
+            self.window_title(),
             url,                       # 直接加载主界面：加启动画面那版实测会卡死，已回退
             width=int(width), height=int(height), min_size=WINDOW_MIN,
             background_color="#000000", text_select=False,
@@ -413,7 +419,7 @@ class CrossLinkApp:
         try:
             import ctypes
             dwm = ctypes.windll.dwmapi
-            title = "%s v%s · %s" % (APP_TITLE, VERSION, self.cfg["name"])
+            title = self.window_title()
             hwnd = self._find_hwnd(title, visible_only=False)
             if not hwnd:
                 return False
@@ -493,7 +499,7 @@ class CrossLinkApp:
             if not big and not small:
                 self._log("图标加载失败：%s" % path)
                 return False
-            hwnd = self._find_hwnd("%s v%s · %s" % (APP_TITLE, VERSION, self.cfg["name"]))
+            hwnd = self._find_hwnd(self.window_title())
             if not hwnd:
                 return False
             # 必须用 PostMessage（异步投递）：SendMessage / SetClassLongPtr 是从别的
@@ -551,8 +557,7 @@ class CrossLinkApp:
             try:
                 # 1) 有 pywebview 窗口：用 Win32 唤出（不要在托盘线程里调 window.show()）。
                 #    连隐藏的窗口也找——"--tray" 启动时它就是藏起来的。
-                hwnd = self._find_hwnd("%s v%s · %s" % (APP_TITLE, VERSION, self.cfg["name"]),
-                                       visible_only=False)
+                hwnd = self._find_hwnd(self.window_title(), visible_only=False)
                 if hwnd:
                     import ctypes
                     user32 = ctypes.windll.user32
@@ -594,7 +599,7 @@ class CrossLinkApp:
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("退出", lambda: self.quit()),
         )
-        self.tray = pystray.Icon("CrossLink", image, "%s · %s" % (APP_TITLE, self.cfg["name"]), menu)
+        self.tray = pystray.Icon("TypeBridge", image, self.window_title(), menu)
         threading.Thread(target=self.tray.run, daemon=True, name="crosslink-tray").start()
 
     # -- 收尾 --------------------------------------------------------------

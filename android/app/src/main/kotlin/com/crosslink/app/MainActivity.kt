@@ -102,6 +102,10 @@ class MainActivity : Activity() {
         }
         window.statusBarColor = C_BG
         window.navigationBarColor = C_BG
+        // 界面语言：设置里选过就按选的，没选过就跟随系统
+        I18n.lang = runCatching {
+            getSharedPreferences("crosslink", MODE_PRIVATE).getString("lang", null)
+        }.getOrNull() ?: I18n.defaultLang()
         try {
             buildShell()
         } catch (e: Throwable) {
@@ -116,6 +120,26 @@ class MainActivity : Activity() {
             setPadding(dp(16), dp(16), dp(16), dp(16))
         }
         setContentView(root)
+        showDevices()
+        // 文案是"渲染后再翻译"，状态行这类动态文字靠定时器兜住
+        i18nHandler.postDelayed(i18nTick, 600)
+    }
+
+    private val i18nHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val i18nTick = object : Runnable {
+        override fun run() {
+            if (this@MainActivity::root.isInitialized) runCatching { I18n.localize(root) }
+            i18nHandler.postDelayed(this, 600)
+        }
+    }
+
+    /** 切换界面语言：记到本地，然后重画一次让文字立刻变过来。 */
+    private fun setLang(value: String) {
+        I18n.lang = value
+        runCatching {
+            getSharedPreferences("crosslink", MODE_PRIVATE).edit()
+                .putString("lang", value).apply()
+        }
         showDevices()
     }
 
@@ -354,6 +378,24 @@ class MainActivity : Activity() {
         modeRow.addView(liveBtn, LinearLayout.LayoutParams(dp(96), dp(40)))
         modeRow.addView(batchBtn, LinearLayout.LayoutParams(dp(112), dp(40)))
         cfg.addView(modeRow, lp(top = 8, matchWidth = true))
+
+        // 界面语言：中文 / English（电脑端界面里也有同一个开关）
+        val langRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = dp(48)
+        }
+        langRow.addView(label("界面语言", 14f, C_DIM))
+        langRow.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+        val zhBtn = tabButton("中文")
+        val enBtn = tabButton("English")
+        zhBtn.setOnClickListener { setLang(I18n.ZH) }
+        enBtn.setOnClickListener { setLang(I18n.EN) }
+        zhBtn.setTextColor(if (I18n.lang == I18n.ZH) C_PRIMARY else C_MUTED)
+        enBtn.setTextColor(if (I18n.lang == I18n.EN) C_PRIMARY else C_MUTED)
+        langRow.addView(zhBtn, LinearLayout.LayoutParams(dp(80), dp(40)))
+        langRow.addView(enBtn, LinearLayout.LayoutParams(dp(96), dp(40)))
+        cfg.addView(langRow, lp(top = 8, matchWidth = true))
         cfg.addView(TextView(this).apply {
             text = "断开当前连接"
             textSize = 14f
@@ -926,6 +968,7 @@ class MainActivity : Activity() {
         ok.setOnClickListener { submit() }
         dlg.setOnShowListener {
             paint()
+            I18n.localize(card)
             hidden.requestFocus()
             card.alpha = 0f
             card.scaleX = 0.92f

@@ -30,6 +30,8 @@ DEFAULTS: dict[str, Any] = {
     "browser": False,        # 默认：界面开在 exe 自己的窗口里（内嵌内核）
     "qt": False,             # True 时改用 Qt 原生界面（--qt 切换）；默认仍用网页那套 UI
     "window": [1120, 740],
+    # 界面语言："zh" 中文 / "en" English / "" 跟随系统
+    "lang": "",
 }
 
 

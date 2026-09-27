@@ -327,6 +327,14 @@
             <div class="grow"><div class="t">开机自动启动</div><div class="d">开机后自动在托盘常驻</div></div>
             <button class="switch" id="sw-auto" role="switch"></button>
           </div>
+          <div class="setting">
+            <div class="grow"><div class="t">界面语言</div><div class="d">Interface language</div></div>
+            <div class="segmented" id="seg-lang" style="align-self:flex-start">
+              <div class="thumb"></div>
+              <button data-v="zh" class="active">中文</button>
+              <button data-v="en">English</button>
+            </div>
+          </div>
         </div>
 
         <div class="card enter" style="margin-top:16px;animation-delay:120ms">
@@ -394,6 +402,7 @@
   .boot-dots i:nth-child(2){opacity:.55}
   .boot-dots i:nth-child(3){opacity:.8}
 </style>
+<script src="/assets/i18n.js"></script>
 <script src="/assets/app.js"></script>
 </body>
 </html>

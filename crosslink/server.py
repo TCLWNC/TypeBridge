@@ -188,6 +188,8 @@ class Hub:
             "urls": urls,
             "pin": self.cfg["pin"],
             "require_pin": self.cfg["require_pin"],
+            # 界面语言："zh" / "en" / ""（跟随浏览器）。前端 i18n.js 用它切换文案。
+            "lang": self.cfg.get("lang", ""),
             "settings": {
                 "inject": self.injector.enabled,
                 "method": self.injector.method,
@@ -366,6 +368,7 @@ class Handler(BaseHTTPRequestHandler):
                              str(data.get("device_id", ""))[:64])
         self._json({"ok": True, "sid": info["sid"], "pc": hub.cfg["name"],
                     "version": VERSION,
+                    "lang": hub.cfg.get("lang", ""),
                     "settings": {"enter_after_send": hub.cfg["enter_after_send"]}})
 
     def _op(self, data: dict) -> None:
@@ -449,7 +452,7 @@ class Handler(BaseHTTPRequestHandler):
             for key, value in data.items():
                 if key in ("inject", "method", "delay_ms", "restore_clipboard",
                            "topmost", "tray", "autostart", "enter_after_send",
-                           "require_pin", "name"):
+                           "require_pin", "name", "lang"):
                     changed[key] = value
             hub.apply_settings(changed)
             self._json({"ok": True, "state": hub.state(hub.mobile_url)})

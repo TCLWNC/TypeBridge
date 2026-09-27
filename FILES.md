@@ -48,6 +48,12 @@ TypeBridge — cross-screen input (跨屏输入). This page explains the reposit
 
 The built Android package, ready to install.
 
+## Language
+
+The UI ships in **English and Chinese** (中文). Switch it in
+**Settings → Language** on the PC, or **Settings → 界面语言** in the Android app.
+Left untouched, it follows the system language of the PC / phone.
+
 ## Not in the repository
 
 `dist-*/`, `_internal/`, the packaged exe folder and the preview screenshots are build

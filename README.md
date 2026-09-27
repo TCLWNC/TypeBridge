@@ -16,12 +16,12 @@ Files are attached to the release page: <https://github.com/TCLWNC/TypeBridge/re
 
 | Platform | File | Notes |
 | --- | --- | --- |
-| Phone | `TypeBridge-1.0.3-android.apk` | Android 8.0+ (minSdk 26), install directly |
-| PC | `TypeBridge-1.0.0-release.zip` | Windows app + full source of both ends + docs |
+| Phone | `TypeBridge-1.1.0-android.apk` | Android 8.0+ (minSdk 26), install directly |
+| PC | `TypeBridge-1.1.0-win64.zip` | Portable Windows build — unzip and run |
 
 The PC app is **portable**: unzip anywhere and run `TypeBridge-PC.exe`. No installer, no Python.
 
-> Version numbers differ on purpose — the PC side is `1.0.0`, the Android side is `1.0.3`.
+Both ends now share a version number; older releases used separate numbers.
 
 ---
 

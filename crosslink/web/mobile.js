@@ -77,6 +77,8 @@
     if (res.ok) {
       sid = res.sid;
       settings = Object.assign(settings, res.settings || {});
+      // 语言：电脑端设了就跟随电脑端，没设就按手机浏览器的语言
+      if (window.I18N) window.I18N.set(res.lang);
       $("pc-name").textContent = res.pc || "电脑";
       $("gate").classList.add("hide");
       setTimeout(() => $("gate").remove(), 420);
@@ -114,6 +116,7 @@
       }
       if (msg.type === "state" || msg.type === "settings") {
         const state = msg.type === "state" ? msg : msg.state;
+        if (state && window.I18N) window.I18N.set(state.lang);
         if (state && state.settings) {
           const local = settings.enter_after_send;
           settings = Object.assign(settings, state.settings);
