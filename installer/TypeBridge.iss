@@ -42,12 +42,20 @@ Name: "cn"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加任务："
 Name: "autostart"; Description: "开机自动启动（在托盘常驻）"; GroupDescription: "附加任务："; Flags: unchecked
-Name: "getmodel"; Description: "安装后下载语音模型（约 228MB，语音输入要用）"; GroupDescription: "附加任务："
 
 [Files]
 ; 整个程序目录（PyInstaller onedir，含 _internal 依赖）
 Source: "{#SrcDir}\pc\TypeBridge-PC-win64\*"; DestDir: "{app}"; \
   Flags: ignoreversion recursesubdirs createallsubdirs
+; 语音模型（SenseVoice-Small，Apache-2.0，约 228MB）：直接装到程序读取的位置，
+; 装完就能离线语音输入，不用再联网下载。已经有的就不覆盖（onlyifdoesntexist）。
+; onnx 本身压不动，用 nocompression 让打包快很多、体积也基本不变。
+Source: "{#SrcDir}\installer\asr\sense-voice\model.int8.onnx"; \
+  DestDir: "{userappdata}\CrossLink\asr\sense-voice"; \
+  Flags: onlyifdoesntexist nocompression
+Source: "{#SrcDir}\installer\asr\sense-voice\tokens.txt"; \
+  DestDir: "{userappdata}\CrossLink\asr\sense-voice"; \
+  Flags: onlyifdoesntexist
 ; 脚本和说明
 Source: "{#SrcDir}\Start-TypeBridge.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SrcDir}\Start-TypeBridge-Tray.bat"; DestDir: "{app}"; Flags: ignoreversion
@@ -68,8 +76,6 @@ Name: "{autodesktop}\TypeBridge（跨屏输入）"; Filename: "{app}\{#AppExe}";
 Name: "{userstartup}\TypeBridge 托盘常驻"; Filename: "{app}\{#AppExe}"; Parameters: "--tray"; Tasks: autostart
 
 [Run]
-Filename: "{app}\Get-Voice-Model.bat"; Description: "下载语音模型（约 228MB）"; \
-  Flags: shellexec nowait postinstall; Tasks: getmodel
 Filename: "{app}\{#AppExe}"; Description: "立即启动 TypeBridge"; \
   Flags: nowait postinstall skipifsilent
 
@@ -77,14 +83,18 @@ Filename: "{app}\{#AppExe}"; Description: "立即启动 TypeBridge"; \
 Type: filesandordirs; Name: "{app}"
 
 [Code]
-{ 卸载时问一句要不要连配置和语音模型一起删掉（在 %APPDATA%\CrossLink）；默认"否" }
+{ 卸载时问一句要不要连配置和语音模型一起删掉（在 %APPDATA%\CrossLink）。
+  两个要点：
+    1. 默认按钮是"否"，删数据必须用户主动点"是"；
+    2. **静默卸载（/SILENT /VERYSILENT）一律不删** —— 静默模式下 Inno 的 MsgBox
+       会自动返回"是"，之前就是这么把用户的 228MB 语音模型删掉的。 }
 function InitializeUninstall(): Boolean;
 var
   Answer: Integer;
   DataDir: String;
 begin
   DataDir := ExpandConstant('{userappdata}\CrossLink');
-  if DirExists(DataDir) then
+  if (not UninstallSilent()) and DirExists(DataDir) then
   begin
     Answer := MsgBox('是否同时删除设置和语音模型？' + #13#10 + #13#10 +
                      DataDir + #13#10 +

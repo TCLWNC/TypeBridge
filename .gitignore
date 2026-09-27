@@ -1,6 +1,7 @@
 # Regeneratable build output (rebuild with the commands in README.md)
 dist*/
 installer/output/
+installer/asr/
 build/
 pc/
 CrossLink-PC-win64/

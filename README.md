@@ -17,12 +17,15 @@ Files are attached to the release page: <https://github.com/TCLWNC/TypeBridge/re
 | Platform | File | Notes |
 | --- | --- | --- |
 | Phone | `TypeBridge-1.1.0-android.apk` | Android 8.0+ (minSdk 26), install directly |
-| PC | `TypeBridge-1.1.0-Setup.exe` | Windows installer (adds Start-menu/desktop shortcuts, uninstaller) |
+| PC | `TypeBridge-1.1.0-Setup.exe` | Windows installer — **bundles the 228 MB speech model**, so voice input works with no extra download |
 | PC | `TypeBridge-1.1.0-win64.zip` | Portable Windows build — unzip and run, no install |
 
 The installer puts everything under `%LOCALAPPDATA%\TypeBridge` (no admin rights needed),
-creates shortcuts, and can set up tray autostart and the speech-model download for you.
+creates shortcuts, can set up tray autostart, and **already contains the offline speech
+model** — it installs that to `%APPDATA%\CrossLink\asr\sense-voice` (skipped if it is
+already there), so voice typing works right after installing, with no internet.
 The zip is the portable alternative: unzip anywhere and run `TypeBridge-PC.exe`.
+For the portable build, run `Get-Voice-Model.bat` once to fetch the model.
 Either way there is no Python to install.
 
 ---
