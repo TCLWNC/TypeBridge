@@ -13,6 +13,7 @@ TypeBridge — cross-screen input (跨屏输入). This page explains the reposit
 | `Allow-Firewall-AsAdmin.bat` | Opens inbound TCP+UDP `8788-8800`; asks for admin once |
 | `Remove-Firewall-Rules.bat` | Deletes those firewall rules |
 | `Get-Voice-Model.bat` | Downloads the offline speech model (~228 MB) for voice typing |
+| `installer/TypeBridge.iss` | Inno Setup script that builds the Windows installer |
 | `TypeBridge-1.0.0-release.zip` | One-file copy of everything (app + source + docs) |
 | `FILES.md` | This file |
 | `HOW-TO-PUSH.md` | How the local folder is wired to the GitHub repo, and how to push |
