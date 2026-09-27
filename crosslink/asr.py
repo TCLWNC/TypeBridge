@@ -202,16 +202,20 @@ class VoiceSession:
         self._text = ""
         self._error = ""
         self.recording = False
+        # 是否"说完自动停"。按住说的模式下要关掉：什么时候停由松手决定，
+        # 否则说话中间停顿超过 1.4 秒就被掐断（用户反馈的"按久一点就强制中断"）。
+        self._auto_stop = True
         # 实时音量（0..1），声纹窗口用它画波形
         self.level = 0.0
         # 实时频谱（16 段），声纹画的就是这个
         self.bars = [0.0] * Spectrum.BUCKETS
 
     # -- 对外 --------------------------------------------------------------
-    def start(self) -> None:
+    def start(self, auto_stop: bool = True) -> None:
         if self.recording:
             return
         self._stop.clear()
+        self._auto_stop = bool(auto_stop)
         self._text = ""
         self._error = ""
         self.recording = True
@@ -269,10 +273,11 @@ class VoiceSession:
                         silence = 0.0
                     else:
                         silence += block
-                    # 说完了（说过话之后静了 1.4 秒）自己停
-                    if voiced > 0.25 and silence >= 1.4:
+                    # 说完了（说过话之后静了 1.4 秒）自己停 —— 只在自动停模式下生效
+                    if self._auto_stop and voiced > 0.25 and silence >= 1.4:
                         break
-                    if time.time() - started > 60.0:
+                    # 按住模式给足时间（说话中间可以停顿），自动停模式 60 秒足够
+                    if time.time() - started > (150.0 if not self._auto_stop else 60.0):
                         break
                 if self._stop.is_set():
                     self.log("🎤 手动停止")

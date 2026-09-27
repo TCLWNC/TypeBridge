@@ -202,10 +202,10 @@ class Hub:
             self.overlay.start()
         return self.overlay
 
-    def voice_start(self) -> bool:
+    def voice_start(self, auto_stop: bool = True) -> bool:
         if self.voice.recording:
             return False
-        self.voice.start()
+        self.voice.start(auto_stop=auto_stop)
         try:
             self.voice_overlay().show()
         except Exception:                  # noqa: BLE001
@@ -239,7 +239,8 @@ class Hub:
         if str(self.cfg.get("voice_hotkey_mode", "hold")) == "toggle":
             self.voice_toggle()
         elif not self.voice.recording:
-            self.voice_start()
+            # 按住式：不启用"说完自动停"，什么时候停由松手决定
+            self.voice_start(auto_stop=False)
 
     def voice_hotkey_release(self) -> None:
         """热键松开：只有"按住式"才在这里结束识别。"""
@@ -570,6 +571,15 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": bool(ok), "detail": detail})
         elif action == "voice":
             self._voice(data)
+        elif action == "open":
+            # 「关于」里的按钮：用系统默认浏览器打开链接（只允许 http/https）
+            from . import winapi
+            target = str(data.get("url", ""))
+            if not target.startswith(("http://", "https://")):
+                self._json({"ok": False, "error": "只允许 http/https 链接"}, 400)
+                return
+            winapi.open_url(target)
+            self._json({"ok": True})
         elif action == "quit":
             self._json({"ok": True})
             hub.broadcast({"type": "quit"})

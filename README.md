@@ -25,6 +25,18 @@ creates shortcuts, and can set up tray autostart and the speech-model download f
 The zip is the portable alternative: unzip anywhere and run `TypeBridge-PC.exe`.
 Either way there is no Python to install.
 
+---
+
+## Screenshots
+
+| PC — input page | PC — settings | PC — about |
+| --- | --- | --- |
+| ![PC input](preview/pc-input.png) | ![PC settings](preview/pc-settings.png) | ![PC about](preview/pc-about.png) |
+
+| Phone — devices | Phone — typing | Phone — settings |
+| --- | --- | --- |
+| ![Phone devices](preview/phone-devices.png) | ![Phone typing](preview/phone-input.png) | ![Phone settings](preview/phone-settings.png) |
+
 Both ends now share a version number; older releases used separate numbers.
 
 ---
@@ -117,11 +129,18 @@ PC     → unicast    {"t":"crosslink","v":1,"name":"MY-PC","port":8788,
 - **Injection method** — `Direct` (default, fastest, never touches the clipboard) or
   `Clipboard paste` (Ctrl+V; more reliable for RDP sessions and some Java apps).
 - **Voice input** (the mic button in the top bar) — click it, speak, and it stops by
-  itself after a short pause. The first use needs the speech model: run
+  itself after a short pause. It lives under **Settings → Voice input**, and the first
+  use needs the speech model: run
   `Get-Voice-Model.bat` once (≈228 MB, downloaded to
   `%APPDATA%\CrossLink\asr\sense-voice`). It is **SenseVoice-Small**, Apache-2.0,
   running fully offline on the CPU — Mandarin, Cantonese, English, Japanese, Korean.
   Recognition is roughly 8× faster than real time (a 5.6 s clip takes 0.7 s).
+  - **Global hotkey** (default `F9`) triggers it from any program, and the key is
+    rebindable. Two trigger modes: **hold to talk** (record while held, stop and type
+    on release) or **press to start** (press once to start, press again to stop).
+  - While recording, a **waveform appears near the bottom of the screen** — nine white
+    bars driven by the microphone's FFT spectrum, on a fully transparent background.
+  - The phone can dictate too: hold the Enter key for 0.5 s to record, release to stop.
 - **Inter-character delay** — default 0 ms; raise to 5–20 ms for old programs that drop keys.
 - **Topmost** — keep the window above everything else.
 - **Run at login / Tray** — close-button behavior and Windows startup.

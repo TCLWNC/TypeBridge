@@ -196,6 +196,11 @@
         <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 4.6 15a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 11.5 4a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 19.4 11a2 2 0 1 1 0 4Z"/>
       </svg><span>设置</span>
     </button>
+    <button class="nav fx" data-page="about">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <circle cx="12" cy="12" r="9"/><path d="M12 11v5.5"/><path d="M12 7.6h.01"/>
+      </svg><span>关于</span>
+    </button>
     <div class="spacer"></div>
     <div class="ver" id="ver">v1.0.0</div>
   </aside>
@@ -379,6 +384,51 @@
           <div class="setting">
             <div class="grow"><div class="t">退出 CrossLink</div><div class="d">电脑端完全关闭，手机将断开</div></div>
             <button class="btn outline danger fx" id="btn-quit">退出</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 关于 -->
+      <section class="page" id="page-about">
+        <div class="grid">
+          <div class="card lift enter">
+            <div class="card-title">关于</div>
+            <div class="big" style="display:flex;align-items:center;gap:14px">
+              <img src="/assets/icon.png" alt="TypeBridge" width="56" height="56" style="border-radius:14px" />
+              <div style="min-width:0">
+                <div class="app" style="font-size:17px">TypeBridge · 跨屏输入</div>
+                <div class="title" id="about-ver">v1.1.0</div>
+              </div>
+            </div>
+            <p class="sub" style="margin-top:12px;color:var(--text-3);font-size:12.5px;line-height:1.7">
+              手机当电脑的无线键盘：手机上打字或说话，文字直接进电脑当前光标所在的地方。
+              同一 Wi-Fi 下自动发现，不经过任何服务器。
+            </p>
+            <div class="card-title" style="margin-top:16px">项目</div>
+            <div class="setting">
+              <div class="grow"><div class="t">开源仓库</div><div class="d">源码、发布包、问题反馈都在这里</div></div>
+              <button class="btn sm fx" id="btn-repo">打开 GitHub</button>
+            </div>
+            <div class="setting">
+              <div class="grow"><div class="t">检查更新</div><div class="d">打开 releases 页面看有没有新版本</div></div>
+              <button class="btn sm fx" id="btn-releases">查看发布页</button>
+            </div>
+            <div class="card-title" style="margin-top:16px">本机信息</div>
+            <div class="setting">
+              <div class="grow"><div class="t">服务端口</div><div class="d">手机和电脑之间走这个端口的 HTTP，同网段可用</div></div>
+              <span class="chip" id="about-port">8788</span>
+            </div>
+            <div class="setting">
+              <div class="grow"><div class="t">本机名称</div><div class="d">手机上显示的名字</div></div>
+              <span class="chip" id="about-name">我的电脑</span>
+            </div>
+            <div class="setting">
+              <div class="grow"><div class="t">语音识别模型</div><div class="d">SenseVoice-Small（Apache-2.0），在电脑本地离线跑</div></div>
+              <span class="chip" id="about-model">检测中</span>
+            </div>
+            <div class="setting">
+              <div class="grow"><div class="t">软件许可</div><div class="d">第三方组件：pywebview、pystray、qrcode、Pillow、sherpa-onnx、sounddevice</div></div>
+            </div>
           </div>
         </div>
       </section>

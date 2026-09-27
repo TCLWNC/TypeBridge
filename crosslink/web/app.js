@@ -438,6 +438,7 @@
       if (typeof state.voice.listening === "boolean") voiceListening = state.voice.listening;
       paintVoice(state.voice);
     }
+    paintAbout(state);
     if (state.app) {
       $("pc-name").textContent = state.app.name || "我的电脑";
       $("ver").textContent = "v" + state.app.version;
@@ -553,6 +554,29 @@
       toast("复制失败，请手动选中地址复制");
     }
   };
+  /* ---------------- 关于 ---------------- */
+  const REPO_URL = "https://github.com/TCLWNC/TypeBridge";
+  function paintAbout(state) {
+    if (!state) return;
+    const set = (id, text) => {
+      const el = $(id);
+      if (el && text) el.textContent = text;
+    };
+    if (state.app) {
+      set("about-ver", "v" + state.app.version);
+      set("about-port", String(state.app.port || ""));
+      set("about-name", state.app.name || "");
+    }
+    if (state.voice) {
+      set("about-model", state.voice.ready ? "已就绪" : "未下载");
+    }
+  }
+  const openUrl = (url) => api("/api/pc/open", { url });
+  if ($("btn-repo")) {
+    $("btn-repo").onclick = () => openUrl(REPO_URL);
+    $("btn-releases").onclick = () => openUrl(REPO_URL + "/releases");
+  }
+
   /* ---------------- 语音输入（设置里的那一项 + 全局热键） ---------------- */
   let voiceListening = false;
   let capturingHotkey = false;

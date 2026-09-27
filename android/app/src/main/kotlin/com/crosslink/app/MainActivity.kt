@@ -154,6 +154,16 @@ class MainActivity : Activity() {
         showDevices()
     }
 
+    /** 用手机浏览器打开链接（「关于」里的仓库/发布页）。 */
+    private fun openUrl(url: String) {
+        runCatching {
+            startActivity(android.content.Intent(
+                android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+        }.onFailure {
+            if (this@MainActivity::notice.isInitialized) notice.text = "没有可用的浏览器"
+        }
+    }
+
     /** 出问题时不闪退，把原因显示出来（可滚动）。 */
     private fun showCrash(e: Throwable) {
         val text = android.util.Log.getStackTraceString(e)
@@ -370,6 +380,28 @@ class MainActivity : Activity() {
         }.getOrNull().orEmpty()
         cfg.addView(label("v$verName · 即打即输 / 编辑后发送 / 16 个功能键", 11.5f, C_MUTED),
             lp(top = 8, matchWidth = true))
+        // —— 关于 ——
+        cfg.addView(label("关于", 13f, C_MUTED, true), lp(top = 16, matchWidth = true))
+        cfg.addView(label("TypeBridge · 跨屏输入", 15f, C_TEXT), lp(top = 8, matchWidth = true))
+        cfg.addView(label("手机当电脑的无线键盘：打字或说话，文字直接进电脑当前光标处",
+            12f, C_MUTED), lp(top = 4, matchWidth = true))
+        cfg.addView(label("版本 v$verName", 12f, C_MUTED), lp(top = 4, matchWidth = true))
+        cfg.addView(TextView(this).apply {
+            text = "开源仓库：github.com/TCLWNC/TypeBridge"
+            textSize = 12f
+            setTextColor(C_PRIMARY)
+            setPadding(0, dp(8), 0, 0)
+            isClickable = true
+            setOnClickListener { openUrl("https://github.com/TCLWNC/TypeBridge") }
+        }, lp(top = 4, matchWidth = true))
+        cfg.addView(TextView(this).apply {
+            text = "看看有没有新版本"
+            textSize = 12f
+            setTextColor(C_PRIMARY)
+            setPadding(0, dp(4), 0, 0)
+            isClickable = true
+            setOnClickListener { openUrl("https://github.com/TCLWNC/TypeBridge/releases") }
+        }, lp(top = 2, matchWidth = true))
         // 「发送后自动回车」和「断开」放进设置页（输入页保持干净）
         val setRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL

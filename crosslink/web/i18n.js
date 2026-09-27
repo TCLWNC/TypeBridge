@@ -84,6 +84,28 @@
       "Press to start listening; press again to stop and type it",
     "已设为按住说话": "Set to hold-to-talk",
     "已设为按一下开始": "Set to press-to-start",
+    /* ---- about ---- */
+    "关于": "About",
+    "项目": "Project",
+    "开源仓库": "Repository",
+    "源码、发布包、问题反馈都在这里": "Source, releases and issue reports live here",
+    "打开 GitHub": "Open GitHub",
+    "检查更新": "Updates",
+    "打开 releases 页面看有没有新版本": "Open the releases page to look for a newer version",
+    "查看发布页": "Open releases",
+    "本机信息": "This computer",
+    "服务端口": "Service port",
+    "手机和电脑之间走这个端口的 HTTP，同网段可用":
+      "Phones talk to this PC over HTTP on this port, inside your LAN",
+    "本机名称": "Computer name",
+    "语音识别模型": "Speech model",
+    "SenseVoice-Small（Apache-2.0），在电脑本地离线跑":
+      "SenseVoice-Small (Apache-2.0), running locally and offline",
+    "已就绪": "ready",
+    "未下载": "not downloaded",
+    "软件许可": "Software licences",
+    "第三方组件：pywebview、pystray、qrcode、Pillow、sherpa-onnx、sounddevice":
+      "Third-party components: pywebview, pystray, qrcode, Pillow, sherpa-onnx, sounddevice",
 
     /* ---- pairing code ---- */
     "配对码": "Pairing code",
