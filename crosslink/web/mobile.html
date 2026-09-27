@@ -1,219 +1,319 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
-<meta name="theme-color" content="#000000" />
-<title>跨屏输入</title>
-<link rel="stylesheet" href="/assets/base.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TypeBridge · 跨屏输入</title>
+<!--
+  手机网页版：和安卓 App 用同一套排版规则
+  间距只用 8 的倍数；圆角只有 卡片16 / 控件12；图标统一 24；可点高度 48 / 56 / 64
+  字号五档 22 / 17 / 14 / 12.5 / 11；配色同 App：
+  底色 #000、卡片 #1A1B21、输入 #101116、主色 #B4C5FF、次要 #C7C9D4、弱化 #8B8E9D、成功 #4CD07D
+-->
 <style>
-  html, body { height: 100%; background: var(--bg); }
-  body { overflow: hidden; }
-  .shell {
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  :root {
+    --bg: #000; --card: #1A1B21; --input: #101116; --line: rgba(255,255,255,.12);
+    --text: #fff; --dim: #C7C9D4; --muted: #8B8E9D; --primary: #B4C5FF;
+    --on-primary: #0B2A5B; --ok: #4CD07D; --chip: rgba(180,197,255,.16);
+    --r-card: 16px; --r-ctl: 12px;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Microsoft YaHei UI", system-ui, -apple-system, sans-serif;
     display: flex; flex-direction: column;
-    height: 100vh; height: 100dvh;
-    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
   }
+  .pages { flex: 1; overflow-y: auto; padding: 16px 16px 8px; }
+  .page { display: none; }
+  .page.active { display: block; animation: fade .22s cubic-bezier(.05,.7,.1,1); }
+  @keyframes fade { from { opacity: 0; transform: translateY(8px); } }
 
-  header {
-    display: flex; align-items: center; gap: 12px;
-    padding: 14px 18px 10px;
+  h1 { margin: 0; font-size: 22px; line-height: 28px; }
+  .subtitle { margin: 2px 0 16px; font-size: 12.5px; color: var(--muted); }
+  .card {
+    background: var(--card); border-radius: var(--r-card);
+    padding: 14px; margin-bottom: 12px;
   }
-  header .grow { flex: 1; min-width: 0; }
-  header .pc { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  header .sub { color: var(--text-3); font-size: 12px; display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+  .card-title {
+    font-size: 13px; color: var(--muted); letter-spacing: .3px;
+    display: flex; align-items: center; height: 24px; margin-bottom: 8px;
+  }
+  .card-title h2 { margin: 0; font-size: 13px; font-weight: 600; }
+  .spacer { flex: 1; }
+  .chip {
+    font-size: 11px; line-height: 16px; color: var(--dim);
+    background: rgba(255,255,255,.08); border: 1px solid var(--line);
+    border-radius: 6px; padding: 2px 8px;
+  }
+  .chip.on { color: var(--primary); background: var(--chip); border-color: transparent; }
+  .chip.ok { color: var(--ok); background: rgba(76,208,125,.16); border-color: transparent; }
 
-  .target-bar {
-    margin: 0 18px 10px;
-    display: flex; align-items: center; gap: 10px;
-    padding: 10px 14px; border-radius: var(--r-md);
-    background: var(--surface-2); border: 1px solid var(--line);
-    font-size: 12.5px; color: var(--text-2);
-    transition: border-color var(--d2) var(--ease), background-color var(--d2) var(--ease);
+  .row {
+    display: flex; align-items: center; gap: 12px; min-height: 48px;
+    font-size: 14px; color: var(--dim);
   }
-  .target-bar.ready { border-color: rgba(76, 208, 125, .38); }
-  .target-bar.warn { border-color: rgba(242, 193, 78, .42); }
-  .target-bar .grow { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .grow { flex: 1; min-width: 0; }
+  .row .t { font-size: 14px; color: var(--dim); }
+  .row .d { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
 
-  .editor { flex: 1; min-height: 0; position: relative; margin: 0 18px; overflow: hidden; }
-  textarea {
-    display: block; width: 100%; height: 100%;
-    padding: 16px 16px 46px;
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: var(--r-lg);
-    color: var(--text);
-    font-size: 17px; line-height: 1.6;
-    resize: none; outline: none;
-    transition: border-color var(--d2) var(--ease);
-    overflow-y: auto;
+  .field {
+    width: 100%; height: 48px; background: var(--input); color: var(--text);
+    border: 1px solid var(--line); border-radius: var(--r-ctl);
+    padding: 0 14px; font-size: 14px; margin-top: 8px; outline: none;
+    font-family: inherit;
   }
-  textarea:focus { border-color: rgba(180, 197, 255, .45); }
-  .counter {
-    position: absolute; right: 14px; bottom: 12px;
-    color: var(--text-3); font-size: 12px;
-    background: rgba(0, 0, 0, .35); padding: 2px 8px; border-radius: 999px;
-  }
+  .field::placeholder { color: var(--muted); }
 
-  .keys {
-    display: flex; gap: 8px; overflow-x: auto;
-    padding: 12px 18px 4px;
-    scrollbar-width: none;
+  .btn {
+    height: 48px; border: 0; border-radius: var(--r-ctl); font-size: 14px;
+    font-weight: 600; font-family: inherit; display: inline-flex;
+    align-items: center; justify-content: center; gap: 8px; padding: 0 16px;
+    background: var(--input); color: var(--dim); border: 1px solid var(--line);
+    transition: background-color .18s ease, transform .12s ease;
   }
-  .keys::-webkit-scrollbar { display: none; }
-  .key {
-    flex: none; height: 38px; min-width: 44px; padding: 0 14px;
-    display: grid; place-items: center;
-    border-radius: var(--r-full);
-    background: var(--surface-2); border: 1px solid var(--line);
-    color: var(--text-2); font-size: 13.5px; font-weight: 600;
-  }
-  .key:hover { background: var(--state); color: var(--text); }
+  .btn.filled { background: var(--primary); color: var(--on-primary); border: 0; }
+  .btn.block { width: 100%; margin-top: 8px; }
+  .btn:active { transform: scale(.98); }
+  .btn.ghost { background: transparent; }
+  .btn.icon { width: 48px; padding: 0; }
+  .btn.icon svg { width: 22px; height: 22px; }
 
-  .bottom {
-    padding: 10px 18px calc(14px + env(safe-area-inset-bottom));
-    display: flex; flex-direction: column; gap: 10px;
+  .iconbtn {
+    width: 48px; height: 48px; border-radius: var(--r-ctl);
+    background: var(--input); border: 1px solid var(--line);
+    display: grid; place-items: center; color: var(--dim); flex: none;
   }
-  .modes { display: flex; justify-content: center; }
-  .actions { display: flex; align-items: center; gap: 10px; }
-  .actions .grow { flex: 1; }
-  .send {
-    flex: 1; height: 50px; border-radius: var(--r-full);
+  .iconbtn svg { width: 24px; height: 24px; }
+  .actions { display: flex; gap: 8px; margin-top: 8px; }
+  .actions .send {
+    flex: 1; height: 48px; border: 0; border-radius: var(--r-ctl);
     background: var(--primary); color: var(--on-primary);
-    font-size: 16px; font-weight: 700;
+    font-size: 14px; font-weight: 600; font-family: inherit;
     display: flex; align-items: center; justify-content: center; gap: 8px;
-    transition: background-color var(--d2) var(--ease), transform var(--d1) var(--ease), opacity var(--d2) var(--ease);
   }
-  .send:hover { background: var(--primary-hi); }
-  .send.off { opacity: .4; pointer-events: none; }
-  .round {
-    width: 50px; height: 50px; flex: none; border-radius: 50%;
-    display: grid; place-items: center;
-    background: var(--surface-2); border: 1px solid var(--line); color: var(--text-2);
-  }
-  .round:hover { background: var(--state); color: var(--text); }
-  .round svg { width: 22px; height: 22px; }
+  .actions .send svg { width: 20px; height: 20px; }
+  .actions .send.listening { background: #F26B6B; color: #fff; }
 
-  /* 连接页 */
+  textarea#input {
+    width: 100%; min-height: 180px; background: var(--input); color: var(--text);
+    border: 1px solid var(--line); border-radius: var(--r-ctl);
+    padding: 14px; font-size: 17px; line-height: 1.5; outline: none;
+    font-family: inherit; resize: none;
+  }
+  textarea#input::placeholder { color: var(--muted); }
+  .counter { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+  .target-bar {
+    display: flex; align-items: center; gap: 8px; font-size: 12.5px;
+    color: var(--muted); margin: 0 0 8px;
+  }
+  .target-bar.ready { color: var(--ok); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.live { background: var(--ok); }
+  .dot.ok { background: var(--ok); }
+
+  .tabs {
+    height: 56px; background: var(--input); border-top: 1px solid var(--line);
+    display: flex; flex: none;
+  }
+  .tab {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 2px; font-size: 11px; color: var(--muted);
+    background: none; border: 0; font-family: inherit;
+  }
+  .tab svg { width: 24px; height: 24px; }
+  .tab.on { color: var(--primary); }
+  .tab .bar { width: 16px; height: 3px; border-radius: 2px; background: transparent; }
+  .tab.on .bar { background: var(--primary); }
+
+  .segmented {
+    display: flex; gap: 8px; margin-top: 8px;
+  }
+  .segmented button {
+    flex: 1; height: 40px; border-radius: var(--r-ctl); font-size: 14px;
+    font-family: inherit; background: var(--input); color: var(--muted);
+    border: 1px solid var(--line);
+  }
+  .segmented button.active { background: var(--chip); color: var(--primary); border-color: transparent; }
+
+  .switch {
+    width: 44px; height: 26px; border-radius: 999px; background: rgba(255,255,255,.16);
+    border: 1px solid var(--line); position: relative; flex: none; transition: background .2s ease;
+  }
+  .switch:after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px;
+    border-radius: 50%; background: #E6E7EE; transition: left .2s ease, background .2s ease;
+  }
+  .switch.on { background: var(--primary); }
+  .switch.on:after { left: 21px; background: var(--on-primary); }
+
+  /* 连接页（没连上电脑时盖在最上面） */
   .gate {
-    position: fixed; inset: 0; z-index: 50;
-    background: var(--bg);
+    position: fixed; inset: 0; z-index: 50; background: var(--bg);
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 16px; padding: 32px; text-align: center;
   }
-  .gate.hide { animation: gateOut var(--d3) var(--ease) forwards; }
-  @keyframes gateOut {
-    to { opacity: 0; transform: scale(1.02); visibility: hidden; }
+  .gate.hide { animation: gateOut .32s cubic-bezier(.05,.7,.1,1) forwards; }
+  @keyframes gateOut { to { opacity: 0; transform: scale(1.02); visibility: hidden; } }
+  .gate h1 { font-size: 22px; }
+  .gate p { margin: 0; color: var(--muted); font-size: 12.5px; max-width: 320px; line-height: 1.7; }
+  .pulse {
+    width: 88px; height: 88px; border-radius: 50%;
+    border: 2px solid rgba(180,197,255,.35); display: grid; place-items: center;
+    animation: breathe 2.4s ease-in-out infinite;
   }
-  .gate h1 { margin: 0; font-size: 24px; }
-  .gate p { margin: 0; color: var(--text-3); font-size: 13px; max-width: 320px; line-height: 1.7; }
-  .gate .field { text-align: center; letter-spacing: 8px; font-size: 20px; max-width: 220px; }
-  .pulse-ring {
-    width: 96px; height: 96px; border-radius: 50%;
-    border: 2px solid rgba(180, 197, 255, .35);
-    display: grid; place-items: center; margin-bottom: 6px;
-    animation: breathe 2.4s var(--ease) infinite;
+  @keyframes breathe { 0%,100% { transform: scale(1); opacity: .9; } 50% { transform: scale(1.06); opacity: .6; } }
+
+  .logline { font-size: 12.5px; color: var(--dim); padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .logline span { color: var(--muted); margin-right: 8px; }
+  .empty { font-size: 12.5px; color: var(--muted); }
+
+  #keys { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  #keys button {
+    min-width: 48px; height: 40px; border-radius: var(--r-ctl); font-size: 13px;
+    background: var(--input); color: var(--dim); border: 1px solid var(--line);
+    font-family: inherit; padding: 0 12px;
   }
-  @keyframes breathe {
-    0%, 100% { transform: scale(1); opacity: .9; }
-    50% { transform: scale(1.06); opacity: .6; }
+
+  .toast-wrap { position: fixed; left: 16px; right: 16px; bottom: 72px; z-index: 60; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
+  .toast {
+    background: rgba(30,32,40,.96); color: #fff; font-size: 12.5px;
+    padding: 10px 14px; border-radius: var(--r-ctl); border: 1px solid var(--line);
+    max-width: 92%; animation: pop .2s ease;
   }
-  .sheet {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 45;
-    background: var(--card);
-    border-radius: var(--r-xl) var(--r-xl) 0 0;
-    padding: 18px 20px calc(24px + env(safe-area-inset-bottom));
-    transform: translateY(100%);
-    transition: transform var(--d3) var(--ease-emph);
-  }
-  .sheet.show { transform: none; }
-  .sheet .handle { width: 40px; height: 4px; border-radius: 999px; background: var(--state-2); margin: 0 auto 14px; }
+  @keyframes pop { from { opacity: 0; transform: translateY(6px); } }
 </style>
 </head>
 <body>
-<div class="shell">
-  <header>
-    <div class="avatar" style="width:42px;height:42px;border-radius:14px">
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8">
-        <rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 20.5h8"/><path d="M12 17v3.5"/>
-      </svg>
+
+<div class="pages">
+  <!-- 发送（输入） -->
+  <section class="page active" id="page-send">
+    <h1 id="pc-name">正在连接电脑…</h1>
+    <div class="subtitle"><i class="dot live" id="dot"></i> <span id="status">已连接同一 Wi-Fi</span></div>
+    <div class="card">
+      <div class="target-bar" id="target-bar">
+        <i class="dot" id="target-dot"></i>
+        <span class="grow" id="target-text">先在电脑上点一下要输入的窗口</span>
+      </div>
+      <textarea id="input" placeholder="在这里打字…" autocomplete="off" autocorrect="off"
+                autocapitalize="off" spellcheck="false"></textarea>
+      <div class="counter" id="counter">0 字</div>
+      <div class="actions">
+        <button class="iconbtn" id="btn-clear" title="清空输入框">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+            <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/>
+          </svg>
+        </button>
+        <button class="iconbtn" id="btn-restore" title="还原上次发送的内容">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+            <path d="M4.5 11A7.5 7.5 0 1 1 7 16.8"/><path d="M4.5 5.5v5.5h5.5"/>
+          </svg>
+        </button>
+        <button class="send" id="btn-send">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+            <path d="M4 12l16-8-6 8 6 8-16-8Z"/>
+          </svg>发送到电脑
+        </button>
+      </div>
+      <div id="keys"></div>
     </div>
-    <div class="grow">
-      <div class="pc" id="pc-name">正在连接电脑…</div>
-      <div class="sub"><i class="dot live" id="dot"></i><span id="status">已连接同一 Wi-Fi</span></div>
+  </section>
+
+  <!-- 记录 -->
+  <section class="page" id="page-logs">
+    <h1>跨屏输入</h1>
+    <div class="subtitle">连接、搜索、发送的动作都会记在这里</div>
+    <div class="card">
+      <div class="card-title"><h2>运行记录</h2></div>
+      <div id="logs"><div class="empty">（空）</div></div>
     </div>
-    <button class="btn icon fx" id="btn-more" title="更多">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9">
-        <circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/>
-      </svg>
-    </button>
-  </header>
+  </section>
 
-  <div class="target-bar" id="target-bar">
-    <i class="dot" id="target-dot"></i>
-    <span class="grow" id="target-text">先在电脑上点一下要输入的窗口</span>
-  </div>
-
-  <div class="editor">
-    <textarea id="input" placeholder="在这里打字…" autocomplete="off" autocorrect="off"
-              autocapitalize="off" spellcheck="false"></textarea>
-    <div class="counter" id="counter">0 字</div>
-  </div>
-
-  <div class="keys" id="keys"></div>
-
-  <div class="bottom">
-    <div class="modes">
+  <!-- 设置 -->
+  <section class="page" id="page-settings">
+    <h1>跨屏输入</h1>
+    <div class="subtitle">手机当电脑的无线键盘</div>
+    <div class="card">
+      <div class="card-title"><h2>发送</h2></div>
+      <div class="row"><div class="grow"><div class="t">发送模式</div><div class="d">即打即输 / 编辑后发送</div></div></div>
       <div class="segmented" id="mode">
-        <div class="thumb"></div>
         <button data-v="live" class="active">即打即输</button>
         <button data-v="batch">编辑后发送</button>
       </div>
+      <div class="row" style="margin-top:8px">
+        <div class="grow"><div class="t">发送后自动回车</div><div class="d">发完自动敲一次回车</div></div>
+        <button class="switch" id="sw-enter" role="switch"></button>
+      </div>
     </div>
-    <div class="actions">
-      <button class="round fx" id="btn-clear" title="清空输入框">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-          <path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/>
-        </svg>
-      </button>
-      <button class="round fx" id="btn-restore" title="还原上次发送的内容">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-          <path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>
-        </svg>
-      </button>
-      <button class="send fx" id="btn-send">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
-          <path d="M4 12l16-8-6 8 6 8-16-8Z"/>
-        </svg>发送到电脑
-      </button>
+
+    <div class="card">
+      <div class="card-title"><h2>连接</h2></div>
+      <div class="row">
+        <div class="grow"><div class="t">电脑地址</div><div class="d mono" id="addr">-</div></div>
+        <button class="btn ghost" id="btn-reconnect">重连</button>
+      </div>
+      <div class="row">
+        <div class="grow"><div class="t">当前设备</div><div class="d">这台手机在电脑上的名字</div></div>
+        <span class="chip" id="set-device">手机</span>
+      </div>
     </div>
-  </div>
+
+    <div class="card">
+      <div class="card-title"><h2>界面语言</h2></div>
+      <div class="segmented" id="seg-lang">
+        <button data-v="zh" class="active">中文</button>
+        <button data-v="en">English</button>
+      </div>
+      <div class="row"><div class="grow"><div class="d" id="lang-hint">跟着电脑端的设置走；电脑端没设就按手机系统语言</div></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><h2>关于</h2></div>
+      <div class="row"><div class="grow"><div class="t">TypeBridge · 跨屏输入</div><div class="d">手机当电脑的无线键盘，打字或说话，字直接进电脑</div></div></div>
+      <div class="row"><div class="grow"><div class="t">版本</div></div><span class="chip" id="about-ver">-</span></div>
+      <div class="row"><div class="grow"><div class="t">开源仓库</div><div class="d">github.com/TCLWNC/TypeBridge</div></div>
+        <a class="btn ghost" href="https://github.com/TCLWNC/TypeBridge" target="_blank" rel="noreferrer">打开</a></div>
+      <div class="row"><div class="grow"><div class="t">发布页</div><div class="d">看看有没有新版本</div></div>
+        <a class="btn ghost" href="https://github.com/TCLWNC/TypeBridge/releases" target="_blank" rel="noreferrer">查看</a></div>
+    </div>
+  </section>
 </div>
 
-<!-- 首次进入：等待配对 -->
+<!-- 底部三栏（和 App 一样） -->
+<nav class="tabs">
+  <button class="tab on" data-page="send">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M4 11.5 20 4l-6 16-2.5-7z"/>
+    </svg><span>发送</span><span class="bar"></span>
+  </button>
+  <button class="tab" data-page="logs">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <path d="M4 7h16M4 12h16M4 17h10"/>
+    </svg><span>记录</span><span class="bar"></span>
+  </button>
+  <button class="tab" data-page="settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <path d="M4 8h16M4 16h16"/><circle cx="9" cy="8" r="2.4" fill="currentColor" stroke="none"/>
+      <circle cx="15" cy="16" r="2.4" fill="currentColor" stroke="none"/>
+    </svg><span>设置</span><span class="bar"></span>
+  </button>
+</nav>
+
+<!-- 还没连上电脑时的连接页 -->
 <div class="gate" id="gate">
-  <div class="pulse-ring">
-    <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#B4C5FF" stroke-width="1.6">
+  <div class="pulse">
+    <svg viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="#B4C5FF" stroke-width="1.6">
       <rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 20.5h8"/>
     </svg>
   </div>
   <h1>正在连接电脑</h1>
   <p id="gate-text">正在和电脑握手…</p>
-  <div id="pin-box" style="display:none;flex-direction:column;gap:10px;align-items:center">
-    <input class="field" id="pin-input" inputmode="numeric" maxlength="4" placeholder="····" />
-    <button class="btn filled fx" id="pin-go">连接</button>
+  <div id="pin-box" style="display:none;flex-direction:column;gap:10px;align-items:center;width:100%;max-width:240px">
+    <input class="field" id="pin-input" inputmode="numeric" maxlength="4" placeholder="配对码" style="text-align:center;letter-spacing:6px" />
+    <button class="btn filled block" id="pin-go">连接</button>
   </div>
-</div>
-
-<div class="backdrop" id="backdrop"><div class="dialog" id="dialog"></div></div>
-<div class="sheet" id="sheet">
-  <div class="handle"></div>
-  <div class="card-title">更多</div>
-  <div class="row"><div class="grow"><div class="name">发送后自动回车</div><div class="sub">发完自动敲一次回车</div></div>
-    <button class="switch" id="sw-enter" role="switch"></button></div>
-  <div class="row"><div class="grow"><div class="name">重新连接</div><div class="sub">换网络或断开后点这里</div></div>
-    <button class="btn sm outline fx" id="btn-reconnect">重连</button></div>
-  <div class="row"><div class="grow"><div class="name">电脑地址</div><div class="sub mono" id="addr">-</div></div></div>
 </div>
 
 <div class="toast-wrap" id="toasts"></div>

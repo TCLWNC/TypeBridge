@@ -78,7 +78,9 @@
       sid = res.sid;
       settings = Object.assign(settings, res.settings || {});
       // 语言：电脑端设了就跟随电脑端，没设就按手机浏览器的语言
-      if (window.I18N) window.I18N.set(res.lang);
+      let savedLang = null;
+      try { savedLang = localStorage.getItem("crosslink.lang"); } catch (e) { /* 忽略 */ }
+      if (window.I18N) window.I18N.set(savedLang || res.lang);
       $("pc-name").textContent = res.pc || "电脑";
       $("gate").classList.add("hide");
       setTimeout(() => $("gate").remove(), 420);
@@ -129,6 +131,10 @@
         if (state && state.app) $("pc-name").textContent = state.app.name;
         if (state && state.urls && state.urls[0]) $("addr").textContent = state.urls[0];
         if (state && state.target) renderTarget(state.target);
+        if (state && state.logs) renderLogs(state.logs);
+        if (state && state.app && $("about-ver")) {
+          $("about-ver").textContent = "v" + state.app.version;
+        }
         $("sw-enter").classList.toggle("on", !!settings.enter_after_send);
       } else if (msg.type === "target") {
         renderTarget(msg.target);
@@ -169,10 +175,16 @@
   /* ---------------- 发送 ---------------- */
   async function send(ops) {
     if (!sid) return;
-    const res = await post("/api/op", { sid, ops });
+    let res = await post("/api/op", { sid, ops });
+    if (res.ok === false && String(res.error || "").indexOf("会话") >= 0) {
+      // 电脑端重启过 / 会话过期：重新握手再发一次。
+      // 以前这里是 location.reload()，结果是"打一个字页面就刷新、字还没了"，
+      // 用户看到的就是"一直不断刷新"。
+      const again = await hello(($("pin-input") || {}).value || "");
+      if (again) res = await post("/api/op", { sid, ops });
+    }
     if (res.ok === false && res.error) {
       toast(res.error);
-      if (String(res.error).indexOf("会话") >= 0) location.reload();
     }
   }
 
@@ -208,17 +220,10 @@
 
   /* ---------------- 模式 ---------------- */
   const seg = $("mode");
-  const thumb = seg.querySelector(".thumb");
-  const moveThumb = () => {
-    const active = seg.querySelector("button.active");
-    thumb.style.width = `${active.offsetWidth}px`;
-    thumb.style.transform = `translateX(${active.offsetLeft - 3}px)`;
-  };
   seg.querySelectorAll("button").forEach((b) => {
     b.onclick = () => {
       seg.querySelectorAll("button").forEach((x) => x.classList.remove("active"));
       b.classList.add("active");
-      moveThumb();
       mode = b.dataset.v;
       if (mode === "batch") {
         sent = $("input").value;
@@ -231,8 +236,6 @@
       }
     };
   });
-  requestAnimationFrame(moveThumb);
-  window.addEventListener("resize", moveThumb);
   const sendIcon = $("btn-send").innerHTML;
   const enterIcon = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M9 10v6h10"/><path d="M19 16V8a2 2 0 0 0-2-2h-3"/><path d="M14 9l3-3-3-3"/></svg>`;
 
@@ -296,10 +299,34 @@
     keysBox.appendChild(b);
   });
 
-  /* ---------------- 更多面板 ---------------- */
-  const sheet = $("sheet");
-  $("btn-more").onclick = () => sheet.classList.toggle("show");
-  $("backdrop").onclick = () => sheet.classList.remove("show");
+  /* ---------------- 底部三栏（发送 / 记录 / 设置） ---------------- */
+  document.querySelectorAll(".tab[data-page]").forEach((tab) => {
+    tab.onclick = () => {
+      document.querySelectorAll(".tab[data-page]").forEach((t) => {
+        t.classList.toggle("on", t === tab);
+      });
+      document.querySelectorAll(".page").forEach((p) => {
+        p.classList.toggle("active", p.id === "page-" + tab.dataset.page);
+      });
+    };
+  });
+
+  /* ---------------- 记录 ---------------- */
+  function renderLogs(list) {
+    const box = $("logs");
+    if (!box) return;
+    if (!list || !list.length) {
+      box.innerHTML = '<div class="empty">（空）</div>';
+      return;
+    }
+    box.innerHTML = list.slice(0, 40).map((e) =>
+      `<div class="logline"><span>${e.t}</span>${escapeHtml(e.who)}　${escapeHtml(e.text)}</div>`
+    ).join("");
+  }
+  const escapeHtml = (s) => String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  /* ---------------- 设置里的开关和语言 ---------------- */
   $("sw-enter").onclick = () => {
     settings.enter_after_send = !settings.enter_after_send;
     $("sw-enter").classList.toggle("on", settings.enter_after_send);
@@ -308,6 +335,27 @@
   };
   $("btn-reconnect").onclick = () => location.reload();
   $("addr").textContent = location.origin;
+  $("set-device").textContent = deviceName;
+
+  /* 界面语言：网页这边存本地（电脑端的语言设置只有本机能改） */
+  const segLang = $("seg-lang");
+  function paintLang(lang) {
+    segLang.querySelectorAll("button").forEach((b) => {
+      b.classList.toggle("active", b.dataset.v === lang);
+    });
+  }
+  segLang.querySelectorAll("button").forEach((b) => {
+    b.onclick = () => {
+      const lang = b.dataset.v;
+      paintLang(lang);
+      if (window.I18N) window.I18N.set(lang);
+      try { localStorage.setItem("crosslink.lang", lang); } catch (e) { /* 忽略 */ }
+    };
+  });
+  try {
+    const saved = localStorage.getItem("crosslink.lang");
+    if (saved) paintLang(saved);
+  } catch (e) { /* 忽略 */ }
 
   /* ---------------- 启动 ---------------- */
   hello("");
