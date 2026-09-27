@@ -338,7 +338,12 @@ class MainActivity : Activity() {
             setOnCheckedChangeListener { _, v -> enterAfter = v }
         }
         opt.addView(swAuto)
-        opt.addView(label("发送后自动回车", 13f, C_DIM))
+        // 英文文案更长，给它一个上限并允许省略号，别把右边的「立即搜索」挤出屏幕
+        opt.addView(label("发送后自动回车", 13f, C_DIM).apply {
+            maxWidth = dp(150)
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            maxLines = 1
+        })
         opt.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
         opt.addView(chip("立即搜索") {
             found.clear()
@@ -348,7 +353,11 @@ class MainActivity : Activity() {
         })
         cfg.addView(opt, lp(top = 8, matchWidth = true))
         cfg.addView(go, lp(top = 8, h = 46, matchWidth = true))
-        cfg.addView(label("v1.0.0 · 即打即输 / 编辑后发送 / 16 个功能键", 11.5f, C_MUTED),
+        // 版本号从安装包里读，别写死（写死过一次，界面显示的还是旧版本号）
+        val verName = runCatching {
+            packageManager.getPackageInfo(packageName, 0).versionName
+        }.getOrNull().orEmpty()
+        cfg.addView(label("v$verName · 即打即输 / 编辑后发送 / 16 个功能键", 11.5f, C_MUTED),
             lp(top = 8, matchWidth = true))
         // 「发送后自动回车」和「断开」放进设置页（输入页保持干净）
         val setRow = LinearLayout(this).apply {
@@ -375,8 +384,10 @@ class MainActivity : Activity() {
         batchBtn = tabButton("编辑后发送")
         liveBtn.setOnClickListener { liveMode = true; syncMode() }
         batchBtn.setOnClickListener { liveMode = false; syncMode() }
-        modeRow.addView(liveBtn, LinearLayout.LayoutParams(dp(96), dp(40)))
-        modeRow.addView(batchBtn, LinearLayout.LayoutParams(dp(112), dp(40)))
+        // 英文（Live typing / Edit then send）比中文长，写死宽度会把字挤出去，
+        // 这里改成按比例分剩余空间，两边都拿得到位置
+        modeRow.addView(liveBtn, LinearLayout.LayoutParams(0, dp(40), 1f))
+        modeRow.addView(batchBtn, LinearLayout.LayoutParams(0, dp(40), 1f).apply { leftMargin = dp(8) })
         cfg.addView(modeRow, lp(top = 8, matchWidth = true))
 
         // 界面语言：中文 / English（电脑端界面里也有同一个开关）
@@ -393,8 +404,8 @@ class MainActivity : Activity() {
         enBtn.setOnClickListener { setLang(I18n.EN) }
         zhBtn.setTextColor(if (I18n.lang == I18n.ZH) C_PRIMARY else C_MUTED)
         enBtn.setTextColor(if (I18n.lang == I18n.EN) C_PRIMARY else C_MUTED)
-        langRow.addView(zhBtn, LinearLayout.LayoutParams(dp(80), dp(40)))
-        langRow.addView(enBtn, LinearLayout.LayoutParams(dp(96), dp(40)))
+        langRow.addView(zhBtn, LinearLayout.LayoutParams(0, dp(40), 1f))
+        langRow.addView(enBtn, LinearLayout.LayoutParams(0, dp(40), 1f).apply { leftMargin = dp(8) })
         cfg.addView(langRow, lp(top = 8, matchWidth = true))
         cfg.addView(TextView(this).apply {
             text = "断开当前连接"

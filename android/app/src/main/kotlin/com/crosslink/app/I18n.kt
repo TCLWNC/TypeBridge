@@ -30,6 +30,7 @@ object I18n {
         // —— 基本 ——
         "手机" to "Phone",
         "电脑" to "PC",
+        "我的电脑" to "My PC",
         "跨屏输入" to "TypeBridge",
         "手机当电脑的无线键盘" to "Use your phone as the PC keyboard",
         "启动出错，请把下面这段发给我：" to "Startup error - please send me this:",
@@ -50,6 +51,7 @@ object I18n {
         "发送后自动回车" to "Press Enter after sending",
         "立即搜索" to "Search now",
         "发送模式" to "Send mode",
+        "界面语言" to "Language",
         "即打即输" to "Live typing",
         "编辑后发送" to "Edit then send",
         "断开当前连接" to "Disconnect",
@@ -66,6 +68,10 @@ object I18n {
 
         // —— 记录页 ——
         "打开应用，开始搜索" to "App opened, searching",
+        "已连接" to "connected",
+        "已断开" to "disconnected",
+        "手机已退出" to "phone left",
+        "手机已退出/断网" to "phone left or lost the network",
         "运行记录" to "Activity log",
         "连接、搜索、发送的动作都会记在这里，方便排查。" to
             "Connection, search and send actions are logged here.",
@@ -137,6 +143,9 @@ object I18n {
         val s = text.trim()
         if (s.isEmpty()) return text
         DICT[s]?.let { return text.replace(s, it) }
+        // 记录页每行开头有个 "· "，先剥掉再查表
+        val bare = s.removePrefix("· ").trim()
+        if (bare != s) DICT[bare]?.let { return text.replace(s, it) }
         for ((re, fn) in RULES) {
             val m = re.matchEntire(s)
             if (m != null) {
