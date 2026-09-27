@@ -12,6 +12,7 @@ TypeBridge — cross-screen input (跨屏输入). This page explains the reposit
 | `Start-TypeBridge-Tray.bat` | Start hidden in the tray (use this from Windows startup) |
 | `Allow-Firewall-AsAdmin.bat` | Opens inbound TCP+UDP `8788-8800`; asks for admin once |
 | `Remove-Firewall-Rules.bat` | Deletes those firewall rules |
+| `Get-Voice-Model.bat` | Downloads the offline speech model (~228 MB) for voice typing |
 | `TypeBridge-1.0.0-release.zip` | One-file copy of everything (app + source + docs) |
 | `FILES.md` | This file |
 | `HOW-TO-PUSH.md` | How the local folder is wired to the GitHub repo, and how to push |
@@ -28,6 +29,7 @@ TypeBridge — cross-screen input (跨屏输入). This page explains the reposit
 | `discovery.py` | UDP device discovery responder (answers the phone's broadcast) |
 | `winapi.py` | Windows layer: `SendInput` Unicode typing, keys/combos, clipboard, firewall rules, autostart |
 | `uia.py` | Reads the focused window's title/process and the text in its edit box (drives the "Input target" card) |
+| `asr.py` | Offline speech recognition (`VoiceSession`: record → endpoint on silence → SenseVoice → text) |
 | `web/` | The web UI (also served to phones): `index.html`, `app.js`, `base.css`, `mobile.html`, `mobile.js` |
 | `assets/` | Icons (`icon.ico`, `icon.png`, `icon-512.png`) |
 | `native.py` | Optional tkinter UI (`--native`) |

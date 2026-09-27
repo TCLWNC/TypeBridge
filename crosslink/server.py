@@ -22,6 +22,7 @@ from typing import Any, Callable
 from urllib.parse import urlparse, parse_qs
 
 from . import VERSION
+from . import asr
 from .config import resource_path
 
 MIME = {
@@ -48,6 +49,8 @@ class Hub:
         self.streams: set[str] = set()
         self.logs: deque[dict] = deque(maxlen=120)
         self.target = {"title": "", "app": "", "self": False}
+        # 电脑端本地语音输入（离线 SenseVoice）
+        self.voice = asr.VoiceSession(log=lambda text: self.log("电脑", text, "system"))
         self.server: ThreadingHTTPServer | None = None
         self.started_at = time.time()
         self._subs: list[queue.Queue] = []
@@ -482,6 +485,8 @@ class Handler(BaseHTTPRequestHandler):
             detail = str(winapi.firewall_last_result().get("msg", ""))
             hub.log("电脑", "放行防火墙：%s" % detail, "system")
             self._json({"ok": bool(ok), "detail": detail})
+        elif action == "voice":
+            self._voice(data)
         elif action == "quit":
             self._json({"ok": True})
             hub.broadcast({"type": "quit"})
@@ -490,6 +495,67 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": False, "error": "未知操作"}, 404)
 
     # -- SSE ---------------------------------------------------------------
+    # -- 语音输入 ----------------------------------------------------------
+    def _voice(self, data: dict) -> None:
+        """本地离线听写。
+
+        start = 开始收音（说完自动停） / stop = 停止并识别 / cancel = 放弃
+        file  = 直接识别一个音频文件（也是给自动化测试用的入口）
+        """
+        hub = self.hub
+        action = str(data.get("action", "start"))
+
+        if action == "status":
+            self._json({"ok": True, "ready": asr.model_ready(),
+                        "state": asr.model_status(), "dir": str(asr.model_dir()),
+                        "url": asr.MODEL_URL})
+            return
+        if action == "file":
+            try:
+                text = asr.transcribe_file(str(data.get("path", "")))
+            except Exception as exc:                    # noqa: BLE001
+                self._json({"ok": False, "error": str(exc)}, 500)
+                return
+            self._deliver_voice(text)
+            self._json({"ok": True, "text": text})
+            return
+        if action == "start":
+            if not asr.model_ready():
+                self._json({"ok": False, "error": "语音模型还没下载",
+                            "dir": str(asr.model_dir()), "url": asr.MODEL_URL}, 409)
+                return
+            hub.voice.start()
+            hub.broadcast({"type": "voice", "state": "listening"})
+            self._json({"ok": True, "listening": True})
+            return
+        if action == "stop":
+            try:
+                text = hub.voice.stop()
+            except Exception as exc:                    # noqa: BLE001
+                hub.broadcast({"type": "voice", "state": "idle"})
+                self._json({"ok": False, "error": str(exc)}, 500)
+                return
+            self._deliver_voice(text)
+            self._json({"ok": True, "text": text})
+            return
+        if action == "cancel":
+            hub.voice.cancel()
+            hub.broadcast({"type": "voice", "state": "idle"})
+            self._json({"ok": True})
+            return
+        self._json({"ok": False, "error": "未知语音动作"}, 404)
+
+    def _deliver_voice(self, text: str) -> None:
+        """识别结果：直接打进电脑当前窗口 + 记一条运行记录 + 同步给各个界面。"""
+        hub = self.hub
+        text = (text or "").strip()
+        if not text:
+            hub.broadcast({"type": "voice", "state": "idle", "text": ""})
+            return
+        hub.injector.submit("insert", text)
+        hub.log("电脑", "🎤 " + text[:60], "text")
+        hub.broadcast({"type": "voice", "state": "done", "text": text})
+
     def _sse(self) -> None:
         hub = self.hub
         # 手机订阅时带 ?sid=xxx；连接一断就说明手机退出/断网了

@@ -45,6 +45,8 @@ ports `8788-8800`. Without that, phones cannot find the computer.
 
 - HTTP + SSE server (default port `8788`; moves up automatically when the port is taken)
 - Device discovery over UDP broadcast, plus a subnet-scan fallback
+- **Offline voice typing**: click *Voice input* in the window, speak, and the text is
+  recognised on this machine and typed into the focused window (no cloud, no account)
 - Three ways to show the UI: embedded window (default), system browser (`--browser`),
   or tray-only with no window (`--tray`)
 - Closing the window keeps it in the tray. Tray menu: Show window / Copy phone link /
@@ -107,6 +109,12 @@ PC     → unicast    {"t":"crosslink","v":1,"name":"MY-PC","port":8788,
 
 - **Injection method** — `Direct` (default, fastest, never touches the clipboard) or
   `Clipboard paste` (Ctrl+V; more reliable for RDP sessions and some Java apps).
+- **Voice input** (the mic button in the top bar) — click it, speak, and it stops by
+  itself after a short pause. The first use needs the speech model: run
+  `Get-Voice-Model.bat` once (≈228 MB, downloaded to
+  `%APPDATA%\CrossLink\asr\sense-voice`). It is **SenseVoice-Small**, Apache-2.0,
+  running fully offline on the CPU — Mandarin, Cantonese, English, Japanese, Korean.
+  Recognition is roughly 8× faster than real time (a 5.6 s clip takes 0.7 s).
 - **Inter-character delay** — default 0 ms; raise to 5–20 ms for old programs that drop keys.
 - **Topmost** — keep the window above everything else.
 - **Run at login / Tray** — close-button behavior and Windows startup.

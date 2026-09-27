@@ -509,6 +509,7 @@
       else if (msg.type === "settings") applyState(msg.state);
       else if (msg.type === "pin") renderPin(msg.pin, true);
       else if (msg.type === "urls") applyState({ urls: msg.urls });
+      else if (msg.type === "voice") onVoiceEvent(msg);
       else if (msg.type === "state") applyState(msg);
       else if (msg.type === "quit") {
         toast("电脑端已退出");
@@ -542,6 +543,41 @@
       toast("复制失败，请手动选中地址复制");
     }
   };
+  /* ---------------- 语音输入（电脑本地离线识别） ---------------- */
+  const voiceBtn = $("btn-voice");
+  let voiceListening = false;
+  function paintVoice() {
+    if (!voiceBtn) return;
+    voiceBtn.classList.toggle("primary", voiceListening);
+    voiceBtn.textContent = voiceListening ? "正在听…（点一下结束）" : "语音输入";
+  }
+  if (voiceBtn) {
+    voiceBtn.onclick = async () => {
+      if (!voiceListening) {
+        const r = await api("/api/pc/voice", { action: "start" });
+        if (r && r.ok) {
+          voiceListening = true;
+          paintVoice();
+          toast("正在听…说完会自动停");
+        } else {
+          toast("语音不可用：" + ((r && r.error) || "未知原因"));
+        }
+      } else {
+        voiceListening = false;
+        paintVoice();
+        const r = await api("/api/pc/voice", { action: "stop" });
+        if (r && r.ok) toast(r.text ? ("识别：" + r.text) : "没听到说话");
+        else toast("识别失败：" + ((r && r.error) || ""));
+      }
+    };
+  }
+  // 电脑端识别完/被取消时，按钮状态跟着回来
+  function onVoiceEvent(msg) {
+    voiceListening = msg.state === "listening";
+    paintVoice();
+    if (msg.state === "done" && msg.text) toast("语音已输入：" + msg.text.slice(0, 40));
+  }
+
   $("btn-firewall").onclick = () => {
     dialog({
       title: "手机连不上电脑？",

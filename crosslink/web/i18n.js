@@ -38,6 +38,18 @@
     "复制链接": "Copy link",
     "链接已复制，发到手机上打开就行": "Link copied - open it on your phone",
     "复制失败，请手动选中地址复制": "Copy failed - select the address manually",
+    /* ---- voice input ---- */
+    "语音输入": "Voice input",
+    "本地离线语音输入：点一下开始说话，说完自动停":
+      "Local offline dictation: click, speak, it stops by itself",
+    "正在听…（点一下结束）": "Listening… (click to stop)",
+    "正在听…说完会自动停": "Listening… it stops when you finish",
+    "语音不可用：": "Voice input unavailable: ",
+    "识别：": "Recognized: ",
+    "识别失败：": "Recognition failed: ",
+    "没听到说话": "No speech detected",
+    "语音已输入：": "Voice text inserted: ",
+    "语音模型还没下载": "The speech model has not been downloaded yet",
 
     /* ---- pairing code ---- */
     "配对码": "Pairing code",

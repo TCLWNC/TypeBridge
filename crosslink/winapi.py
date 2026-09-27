@@ -238,7 +238,9 @@ def paste_text(text: str, restore: bool = True) -> None:
         return
     time.sleep(0.03)
     press_combo("V", ctrl=True)
-    time.sleep(0.06)
+    # 贴完要等目标程序真的把剪贴板读走再还原：Notepad、记事本这类老程序是异步读剪贴板的，
+    # 原来只等 60ms 就还原，它读到的还是旧内容 —— 表现就是"粘贴没反应"。
+    time.sleep(0.35)
     if restore and backup is not None:
         clipboard_set_text(backup)
 
