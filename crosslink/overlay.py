@@ -1,39 +1,71 @@
 # -*- coding: utf-8 -*-
-"""收音时屏幕上的声纹。
+"""收音时屏幕上的声纹 —— 效果照 Handy 搬过来。
 
-样式照 Handy（github.com/cjpais/Handy，同样是离线语音输入）来：
-一个小的深色圆角"药丸"，中间 9 根短竖条，跟着麦克风频谱起伏。
-参数也照抄它的：9 根条、每根高 3~18px、取频谱前 9 段、指数平滑 0.7/0.3；
-频谱本身是 1024 点 FFT + 对数分频 + dB 映射（见 asr.Spectrum）。
+Handy（github.com/cjpais/Handy，同样是离线语音输入）的声纹参数，这里是原样抄的：
+  .swave        flex、居中、gap 3px、高 18px
+  .swave i      width 4px、min 3px、max 18px、border-radius 2px、颜色 = 强调色
+  高度公式       max(3, min(18, 3 + v^0.7 * 15))，值来自 FFT 频段（见 asr.Spectrum）
+  待命动画      scaleY 0.55~1.5、900ms 循环、每根条延迟 0/75/150/225/300ms（中间最晚）
+  配色          浅色主题 #FAA2CA，深色主题 #F28CBB（Handy 的 --color-logo-primary）
 
-用 tkinter 画，不依赖额外库；窗口无边框、置顶、不抢焦点。
+窗口本身**背景透明**（Win32 分层窗口 + 色键），所以屏幕上只剩那几根粉色的条，
+不会挡到后面的东西；窗口置顶且不抢焦点。
 """
 
 from __future__ import annotations
 
 import ctypes
+import math
 import threading
+import time
 import tkinter as tk
 
-BARS = 9                     # Handy 的 WAVE_BARS
-BAR_W = 3
+# ---- Handy 的尺寸（逻辑像素，最后按 DPI 缩放） ----
+BARS = 9
+BAR_W = 4
 BAR_GAP = 3
-BAR_MIN, BAR_MAX = 3, 18     # Handy 的 Math.max(3, Math.min(18, 3 + v^0.7 * 15))
-PILL_W, PILL_H = 184, 40     # Handy 的胶囊尺寸
-RADIUS = 12
+BAR_MIN, BAR_MAX = 3.0, 18.0
+BAR_RADIUS = 2
+WINDOW_W, WINDOW_H = 184, 40
 BOTTOM_OFFSET = 120
+ARM_MS = 900.0                 # 待命动画周期
+ARM_DELAYS = [0, 75, 150, 225, 300, 225, 150, 75, 0]
+ARM_BASE = 6.0                 # .swave.arming i { height: 6px }
+ARM_SCALE_MIN, ARM_SCALE_MAX = 0.55, 1.5
 
-BG = "#1C1C1E"
-LINE = "#3A3A3C"
-BAR = "#E8E8EE"
+KEY = "#000000"                # 色键：这个颜色会被挖成透明（所以画笔别用它）
 
 
 def _scale() -> float:
-    """DPI 缩放：96dpi 记 1.0，免得高分屏上画出来太小。"""
+    """DPI 缩放：96dpi 记 1.0。"""
     try:
         return max(1.0, ctypes.windll.user32.GetDpiForSystem() / 96.0)
     except Exception:                     # noqa: BLE001
         return 1.0
+
+
+def _colors() -> tuple[str, str]:
+    """竖条配色：(工作时, 待命时)。
+
+    Handy 原本是粉色的（浅色主题 #FAA2CA / 深色 #F28CBB），这里按用户要求改成白色；
+    待命动画用暗一点的灰，跟活动状态区分开。
+    """
+    return ("#FFFFFF", "#9A9A9A")
+
+
+def _make_colorkey(win: tk.Toplevel) -> None:
+    """用分层窗口把 KEY 颜色挖透明；只设色键不设 alpha，所以条本身是不透明的。"""
+    GWL_EXSTYLE = -20
+    WS_EX_LAYERED = 0x00080000
+    LWA_COLORKEY = 0x00000001
+    user32 = ctypes.windll.user32
+    win.update_idletasks()
+    hwnd = int(win.winfo_id())
+    style = user32.GetWindowLongW(ctypes.c_void_p(hwnd), GWL_EXSTYLE)
+    user32.SetWindowLongW(ctypes.c_void_p(hwnd), GWL_EXSTYLE, style | WS_EX_LAYERED)
+    user32.SetLayeredWindowAttributes(ctypes.c_void_p(hwnd),
+                                      ctypes.c_uint32(0x000000),
+                                      ctypes.c_ubyte(255), LWA_COLORKEY)
 
 
 class WaveOverlay(threading.Thread):
@@ -48,6 +80,7 @@ class WaveOverlay(threading.Thread):
         self._ready = threading.Event()
         self._root = None
 
+    # -- 外部接口 ----------------------------------------------------------
     def show(self) -> None:
         self._hide.clear()
         self._show.set()
@@ -59,49 +92,62 @@ class WaveOverlay(threading.Thread):
     def stop(self) -> None:
         self._hide.set()
 
+    # -- 画窗口 ------------------------------------------------------------
     def run(self) -> None:
         try:
             k = _scale()
-            w, h = int(PILL_W * k), int(PILL_H * k)
+            accent, muted = _colors()
+            w, h = int(WINDOW_W * k), int(WINDOW_H * k)
             gap, bw = int(BAR_GAP * k), int(BAR_W * k)
             root = tk.Tk()
             root.withdraw()
             win = tk.Toplevel(root)
-            win.overrideredirect(True)          # 无边框
-            win.attributes("-topmost", True)    # 置顶
-            try:
-                win.attributes("-alpha", 0.94)
-            except tk.TclError:
-                pass
+            win.overrideredirect(True)
+            win.attributes("-topmost", True)
             x = (win.winfo_screenwidth() - w) // 2
             y = win.winfo_screenheight() - h - int(BOTTOM_OFFSET * k)
             win.geometry("%dx%d+%d+%d" % (w, h, x, y))
-            canvas = tk.Canvas(win, width=w, height=h, highlightthickness=0,
-                               bg="#000000")
+            canvas = tk.Canvas(win, width=w, height=h, highlightthickness=0, bg=KEY)
             canvas.pack()
-            r = int(RADIUS * k)
-            canvas.create_polygon(
-                r, 0, w - r, 0, w, r, w, h - r, w - r, h, r, h, 0, h - r, 0, r,
-                smooth=True, splinesteps=24, fill=BG, outline=LINE,
-                width=max(1, int(k)))
+
             total = BARS * bw + (BARS - 1) * gap
             x0 = (w - total) // 2
             mid = h // 2
-            rects = []
+            bars_items = []
             for i in range(BARS):
                 bx = x0 + i * (bw + gap)
-                rects.append(canvas.create_rectangle(
-                    bx, mid - int(BAR_MIN * k), bx + bw, mid + int(BAR_MIN * k),
-                    fill=BAR, outline=""))
+                # 圆头竖条 = 一个矩形 + 上下两个半圆（border-radius 2px = 宽度一半）
+                body = canvas.create_rectangle(bx, mid, bx + bw, mid, fill=accent, outline="")
+                top = canvas.create_oval(bx, mid, bx + bw, mid, fill=accent, outline="")
+                bot = canvas.create_oval(bx, mid, bx + bw, mid, fill=accent, outline="")
+                bars_items.append((bx, body, top, bot))
+
             win.deiconify()
             self._root = root
             self._ready.set()
+            try:
+                _make_colorkey(win)
+            except Exception:                 # noqa: BLE001
+                pass
 
             shown = True
             smooth = [0.0] * BARS
+            opened = time.time()
+
+            def place(i: int, height: float, fill: str) -> None:
+                bx, body, top, bot = bars_items[i]
+                half = max(height / 2.0, bw / 2.0)
+                y0 = mid - half
+                y1 = mid + half
+                canvas.coords(body, bx, y0 + bw / 2.0, bx + bw, y1 - bw / 2.0)
+                canvas.coords(top, bx, y0, bx + bw, y0 + bw)
+                canvas.coords(bot, bx, y1 - bw, bx + bw, y1)
+                if canvas.itemcget(body, "fill") != fill:
+                    for item in (body, top, bot):
+                        canvas.itemconfigure(item, fill=fill)
 
             def tick() -> None:
-                nonlocal shown
+                nonlocal shown, opened
                 if self._hide.is_set():
                     self._hide.clear()
                     if shown:
@@ -112,19 +158,27 @@ class WaveOverlay(threading.Thread):
                         win.deiconify()
                         win.attributes("-topmost", True)
                         shown = True
+                        opened = time.time()      # 重新开始待命动画
                     try:
                         values = list(self.bars())[:BARS]
-                    except Exception:           # noqa: BLE001
+                    except Exception:             # noqa: BLE001
                         values = []
+                    arming = (time.time() - opened) * 1000.0 < 600.0
+                    now_ms = time.time() * 1000.0
                     for i in range(BARS):
+                        if arming:
+                            # Handy 的待命：6px 基准 × 0.55~1.5 的呼吸，每根条错开
+                            phase = ((now_ms - ARM_DELAYS[i]) % ARM_MS) / ARM_MS
+                            wave = 0.5 - 0.5 * math.cos(2 * math.pi * phase)
+                            scale = ARM_SCALE_MIN + (ARM_SCALE_MAX - ARM_SCALE_MIN) * wave
+                            place(i, ARM_BASE * scale * k, muted)
+                            continue
                         target = float(values[i]) if i < len(values) else 0.0
-                        # 照 Handy：指数平滑 prev*0.7 + target*0.3
+                        # Handy 的指数平滑（0.7 / 0.3），再套它的高度公式
                         smooth[i] = smooth[i] * 0.7 + target * 0.3
-                        tall = BAR_MIN + (smooth[i] ** 0.7) * (BAR_MAX - BAR_MIN)
-                        tall = max(BAR_MIN, min(BAR_MAX, tall))
-                        half = int(tall * k)
-                        bx = x0 + i * (bw + gap)
-                        canvas.coords(rects[i], bx, mid - half, bx + bw, mid + half)
+                        tall = max(BAR_MIN,
+                                   min(BAR_MAX, BAR_MIN + (smooth[i] ** 0.7) * 15.0))
+                        place(i, tall * k, accent)
                 root.after(50, tick)
 
             root.after(50, tick)
