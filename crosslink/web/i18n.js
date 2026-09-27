@@ -256,31 +256,52 @@
   const ATTRS = ["placeholder", "title", "alt", "aria-label"];
 
   function applyTo(root) {
-    if (!root || LANG === "zh") return;
-    // 页面标题不是文本节点，得单独翻
-    const t = translate(document.title);
-    if (t !== null && t !== document.title) document.title = t;
+    if (!root) return;
+    // 中文原文必须留住：翻译是把文字就地改掉的，不存一份就再也切不回中文了
+    // （之前就踩了这个坑：切到英文后切不回中文，界面一直英文）。
+    // 标题比较特殊：app.js 会在状态到达后改写它，所以不能死记第一次的值。
+    // 规则：如果当前标题还是我们上次处理过的那条，就按语言来回切；
+    // 否则说明是程序新设的标题，重新记一份原文。
+    const cached = document.__zhTitle;
+    const seen = cached !== undefined
+      && (document.title === cached || document.title === (translate(cached) || cached));
+    if (!seen) {
+      document.__zhTitle = document.title;
+      if (LANG === "en") {
+        const t = translate(document.title);
+        if (t) document.title = t;
+      }
+    } else {
+      const wantTitle = LANG === "zh" ? cached : (translate(cached) || cached);
+      if (document.title !== wantTitle) document.title = wantTitle;
+    }
+
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
     const nodes = [];
     while (walker.nextNode()) nodes.push(walker.currentNode);
     for (const node of nodes) {
-      const out = translate(node.nodeValue);
-      if (out !== null && out !== node.nodeValue) node.nodeValue = out;
+      if (node.__zh === undefined) node.__zh = node.nodeValue;
+      const src = node.__zh;
+      const want = LANG === "zh" ? src : (translate(src) || src);
+      if (node.nodeValue !== want) node.nodeValue = want;
     }
     const els = root.querySelectorAll ? root.querySelectorAll("[placeholder],[title],[alt],[aria-label]") : [];
     for (const el of els) {
       for (const attr of ATTRS) {
-        const v = el.getAttribute(attr);
-        if (!v) continue;
-        const out = translate(v);
-        if (out !== null) el.setAttribute(attr, out);
+        const cur = el.getAttribute(attr);
+        if (cur === null) continue;
+        const key = "__zh_" + attr;
+        if (el[key] === undefined) el[key] = cur;
+        const src = el[key];
+        const want = LANG === "zh" ? src : (translate(src) || src);
+        if (cur !== want) el.setAttribute(attr, want);
       }
     }
   }
 
   function watch() {
     const mo = new MutationObserver(() => {
-      if (busy || LANG === "zh") return;
+      if (busy) return;
       busy = true;
       queueMicrotask(() => {
         busy = false;
