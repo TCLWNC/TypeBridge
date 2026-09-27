@@ -14,6 +14,7 @@ import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
@@ -79,6 +80,15 @@ class MainActivity : Activity() {
     private var manualBox: LinearLayout? = null
     private var refreshBar: ProgressBar? = null
     private var emptyHint: TextView? = null
+    // 语音输入：手机只当麦克风，录好的 WAV 发给电脑识别
+    private var recorder: android.media.AudioRecord? = null
+    @Volatile private var recording = false
+    // 长按「输入」转语音：按住 0.5 秒开始，松手结束
+    private val holdHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var holdRunnable: Runnable? = null
+    private var holdArmed = false
+    private var pendingHold = false
+    private val HOLD_MS = 500L
     private val found = LinkedHashMap<String, Discovery.Found>()
     private val lastSeen = HashMap<String, Long>()
     private val logs = mutableListOf<String>()
@@ -88,6 +98,7 @@ class MainActivity : Activity() {
     private var tabButtons = mutableMapOf<String, Button>()
     private var tabItems = mutableMapOf<String, Triple<View, TextView, View>>()
     private var lastSignature = ""
+    private val REQ_MIC = 1001
     @Volatile private var discovering = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -706,16 +717,53 @@ class MainActivity : Activity() {
             textSize = 14f
             setTextColor(C_ON_PRIMARY)
             background = pressable(C_PRIMARY, 12f)
-            setOnClickListener {
-                // 按你说的：这个键就是敲一次回车；文本同步由输入框实时完成
-                send(listOf(JSONObject().put("k", "key").put("key", "ENTER")))
-                // 点完之后清空手机输入框——注意要把"已同步基线"也清成空，
-                // 否则清空这个动作会被当成一次文本变化同步过去，把电脑上的内容也删掉。
-                lastSent = input.text.toString()
-                input.setText("")
-                sent = ""
-                counter.text = "0 字"
-                if (this@MainActivity::notice.isInitialized) notice.text = "已敲回车，输入框已清空（可用「恢复」找回）"
+            // 麦克风图标直接并进这个键：短按敲回车，按住 0.5 秒变语音，松手即止
+            setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_mic, 0, 0, 0)
+            compoundDrawablePadding = dp(8)
+            compoundDrawableTintList = ColorStateList.valueOf(C_ON_PRIMARY)
+        }
+        // 短按 = 敲一次回车；按住 0.5 秒 = 转成语音输入，一直按着一直听，松手立刻结束并识别
+        fun doEnter() {
+            send(listOf(JSONObject().put("k", "key").put("key", "ENTER")))
+            // 点完之后清空手机输入框——注意要把"已同步基线"也清成空，
+            // 否则清空这个动作会被当成一次文本变化同步过去，把电脑上的内容也删掉。
+            lastSent = input.text.toString()
+            input.setText("")
+            sent = ""
+            counter.text = "0 字"
+            if (this@MainActivity::notice.isInitialized) {
+                notice.text = "已敲回车，输入框已清空（可用「恢复」找回）"
+            }
+        }
+        sendBtn.setOnTouchListener { view, ev ->
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    view.isPressed = true
+                    holdArmed = true
+                    val run = Runnable {
+                        if (holdArmed && !recording) {
+                            holdArmed = false
+                            startRecording(holdMode = true)
+                        }
+                    }
+                    holdRunnable = run
+                    holdHandler.postDelayed(run, HOLD_MS)
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    holdArmed = false
+                    holdRunnable?.let { holdHandler.removeCallbacks(it) }
+                    holdRunnable = null
+                    view.isPressed = false
+                    if (recording) {
+                        recording = false          // 松手即止：录音线程收尾并上传识别
+                        paintMic()
+                    } else {
+                        doEnter()                  // 短按：还是敲回车
+                    }
+                    true
+                }
+                else -> false
             }
         }
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -1087,6 +1135,150 @@ class MainActivity : Activity() {
         val s = sid
         if (s.isEmpty() || !this::client.isInitialized) return
         runCatching { client.op(s, listOf(JSONObject().put("k", "bye"))) }
+    }
+
+    /* ---------------- 语音输入：手机当无线麦克风 ----------------
+     * 手机上不装识别模型：按住麦克风录音（16k 单声道 PCM），录完把整段 WAV
+     * 发给电脑，电脑用它本地的 SenseVoice 识别，再把文字回给手机填进输入框，
+     * 之后照常走同步打进电脑当前窗口。
+     */
+    /** 检查麦克风权限再开录（第一次长按会弹一次授权） */
+    private fun ensureMic(holdMode: Boolean = false) {
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+            != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            pendingHold = holdMode
+            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), REQ_MIC)
+            return
+        }
+        startRecording(holdMode)
+    }
+
+    override fun onRequestPermissionsResult(code: Int, perms: Array<out String>,
+                                            granted: IntArray) {
+        super.onRequestPermissionsResult(code, perms, granted)
+        if (code != REQ_MIC) return
+        if (granted.isNotEmpty() &&
+            granted[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            startRecording(pendingHold)
+        } else if (this::notice.isInitialized) {
+            notice.text = "没有麦克风权限，语音输入用不了"
+        }
+    }
+
+    private fun paintMic() {
+        if (this::sendBtn.isInitialized) {
+            if (recording) {
+                // 录音时中间那个键直接变成"松开结束"，一眼能看出在收音
+                sendBtn.text = "松开结束"
+                sendBtn.background = pressable(C_BAD, 12f)
+                sendBtn.setTextColor(C_TEXT)
+                sendBtn.compoundDrawableTintList = ColorStateList.valueOf(C_TEXT)
+            } else {
+                sendBtn.text = "输入"
+                sendBtn.background = pressable(C_PRIMARY, 12f)
+                sendBtn.setTextColor(C_ON_PRIMARY)
+                sendBtn.compoundDrawableTintList = ColorStateList.valueOf(C_ON_PRIMARY)
+            }
+        }
+        if (recording && this::notice.isInitialized) {
+            notice.text = "正在听…松手结束（也可以点上面的麦克风）"
+        }
+    }
+
+    private fun startRecording(holdMode: Boolean = false) {
+        val sr = 16000
+        val minBuf = android.media.AudioRecord.getMinBufferSize(
+            sr, android.media.AudioFormat.CHANNEL_IN_MONO,
+            android.media.AudioFormat.ENCODING_PCM_16BIT)
+        if (minBuf <= 0) {
+            if (this::notice.isInitialized) notice.text = "这台手机不支持录音"
+            return
+        }
+        val rec = runCatching {
+            android.media.AudioRecord(
+                android.media.MediaRecorder.AudioSource.MIC, sr,
+                android.media.AudioFormat.CHANNEL_IN_MONO,
+                android.media.AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuf, sr * 2))
+        }.getOrNull()
+        if (rec == null) {
+            if (this::notice.isInitialized) notice.text = "录音启动失败"
+            return
+        }
+        recorder = rec
+        recording = true
+        paintMic()
+        if (holdMode && this::notice.isInitialized) notice.text = "正在听…松手结束"
+        val bufSize = maxOf(minBuf, sr / 10)
+        thread {
+            val out = java.io.ByteArrayOutputStream()
+            var peak = 0.0
+            try {
+                rec.startRecording()
+                val buf = ByteArray(bufSize)
+                while (recording) {
+                    val n = rec.read(buf, 0, buf.size)
+                    if (n <= 0) continue
+                    out.write(buf, 0, n)
+                    var i = 0
+                    while (i + 1 < n) {
+                        val v = (((buf[i + 1].toInt() and 0xFF) shl 8) or
+                            (buf[i].toInt() and 0xFF)).toShort() / 32768.0
+                        if (Math.abs(v) > peak) peak = Math.abs(v)
+                        i += 2
+                    }
+                }
+            } catch (e: Throwable) {
+                logs.add("录音出错：$e")
+            } finally {
+                runCatching { rec.stop() }
+                runCatching { rec.release() }
+                recorder = null
+                recording = false
+            }
+            val pcm = out.toByteArray()
+            if (pcm.size < sr / 2) {                 // 不到 0.5 秒，等于没说话
+                runOnUiThread {
+                    paintMic()
+                    if (this@MainActivity::notice.isInitialized) notice.text = "说话时间太短"
+                }
+                return@thread
+            }
+            runOnUiThread {
+                if (this@MainActivity::notice.isInitialized) notice.text = "正在识别…"
+            }
+            val res = runCatching { client.transcribe(sid, wav(pcm, sr)) }.getOrNull()
+            val text = res?.optString("text").orEmpty()
+            runOnUiThread {
+                paintMic()
+                if (res != null && res.optBoolean("ok") && text.isNotEmpty()) {
+                    val cur = input.text.toString()
+                    input.setText(cur + text)
+                    input.setSelection(input.text.length)
+                    if (this@MainActivity::notice.isInitialized) notice.text = "语音已识别：$text"
+                } else if (peak < 0.02) {
+                    if (this@MainActivity::notice.isInitialized) notice.text = "没听到声音，靠近点再说"
+                } else {
+                    val err = res?.optString("error").orEmpty()
+                    if (this@MainActivity::notice.isInitialized) {
+                        notice.text = if (err.isNotEmpty()) err else "没听清，再说一次"
+                    }
+                }
+            }
+        }
+    }
+
+    /** 给 PCM 套一个 44 字节的 WAV 头，电脑端直接当 WAV 读。 */
+    private fun wav(pcm: ByteArray, sampleRate: Int): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        fun le32(v: Int) = byteArrayOf((v and 0xFF).toByte(), ((v shr 8) and 0xFF).toByte(),
+            ((v shr 16) and 0xFF).toByte(), ((v shr 24) and 0xFF).toByte())
+        fun le16(v: Int) = byteArrayOf((v and 0xFF).toByte(), ((v shr 8) and 0xFF).toByte())
+        out.write("RIFF".toByteArray()); out.write(le32(36 + pcm.size)); out.write("WAVE".toByteArray())
+        out.write("fmt ".toByteArray()); out.write(le32(16)); out.write(le16(1)); out.write(le16(1))
+        out.write(le32(sampleRate)); out.write(le32(sampleRate * 2))
+        out.write(le16(2)); out.write(le16(16))
+        out.write("data".toByteArray()); out.write(le32(pcm.size)); out.write(pcm)
+        return out.toByteArray()
     }
 
     private fun flush() {

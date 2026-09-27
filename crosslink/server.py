@@ -51,6 +51,7 @@ class Hub:
         self.target = {"title": "", "app": "", "self": False}
         # 电脑端本地语音输入（离线 SenseVoice）
         self.voice = asr.VoiceSession(log=lambda text: self.log("电脑", text, "system"))
+        self.overlay = None          # 收音时的声纹浮层，第一次用时才创建
         self.server: ThreadingHTTPServer | None = None
         self.started_at = time.time()
         self._subs: list[queue.Queue] = []
@@ -190,6 +191,58 @@ class Hub:
                 for p in sorted(items, key=lambda p: p["since"])]
 
     # -- 快照 --------------------------------------------------------------
+    # -- 语音输入（电脑本地离线识别）----------------------------------------
+    def voice_overlay(self):
+        """收音时屏幕上的声纹浮层；第一次用到才建窗口。"""
+        if self.overlay is None:
+            from .overlay import WaveOverlay
+            self.overlay = WaveOverlay(level=lambda: self.voice.level,
+                                       log=lambda t: self.log("电脑", t, "warn"))
+            self.overlay.start()
+        return self.overlay
+
+    def voice_start(self) -> bool:
+        if self.voice.recording:
+            return False
+        self.voice.start()
+        try:
+            self.voice_overlay().show()
+        except Exception:                  # noqa: BLE001
+            pass
+        self.broadcast({"type": "voice", "state": "listening"})
+        return True
+
+    def voice_stop(self) -> str:
+        """停止录音 → 识别 → 文字打进当前窗口。"""
+        try:
+            text = self.voice.stop()
+        finally:
+            if self.overlay is not None:
+                self.overlay.hide()
+        self.deliver_voice(text)
+        return text
+
+    def voice_toggle(self) -> None:
+        """热键用：正在录就停，否则开始。"""
+        if self.voice.recording:
+            try:
+                self.voice_stop()
+            except Exception as exc:        # noqa: BLE001
+                self.log("电脑", "语音识别失败：%s" % exc, "warn")
+                self.broadcast({"type": "voice", "state": "idle"})
+        else:
+            self.voice_start()
+
+    def deliver_voice(self, text: str) -> None:
+        """识别结果：直接打进电脑当前窗口 + 记一条运行记录 + 同步给各个界面。"""
+        text = (text or "").strip()
+        if not text:
+            self.broadcast({"type": "voice", "state": "idle", "text": ""})
+            return
+        self.injector.submit("insert", text)
+        self.log("电脑", "🎤 " + text[:60], "text")
+        self.broadcast({"type": "voice", "state": "done", "text": text})
+
     def state(self, urls: list[str]) -> dict:
         return {
             "type": "state",
@@ -199,6 +252,10 @@ class Hub:
             "require_pin": self.cfg["require_pin"],
             # 界面语言："zh" / "en" / ""（跟随浏览器）。前端 i18n.js 用它切换文案。
             "lang": self.cfg.get("lang", ""),
+            # 语音输入的状态：模型在不在、热键是什么、当前是否在收音
+            "voice": {"ready": asr.model_ready(),
+                      "hotkey": self.cfg.get("voice_hotkey", ""),
+                      "listening": bool(self.voice.recording)},
             "settings": {
                 "inject": self.injector.enabled,
                 "method": self.injector.method,
@@ -348,6 +405,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def _do_post(self) -> None:
         path = urlparse(self.path).path
+        # 手机语音走原始字节（WAV），不能按 JSON 解析，所以放在最前面
+        if path == "/api/voice/audio":
+            self._voice_audio()
+            return
         data = self._body()
 
         if path == "/api/hello":
@@ -463,7 +524,7 @@ class Handler(BaseHTTPRequestHandler):
             for key, value in data.items():
                 if key in ("inject", "method", "delay_ms", "restore_clipboard",
                            "topmost", "tray", "autostart", "enter_after_send",
-                           "require_pin", "name", "lang"):
+                           "require_pin", "name", "lang", "voice_hotkey"):
                     changed[key] = value
             hub.apply_settings(changed)
             self._json({"ok": True, "state": hub.state(hub.mobile_url)})
@@ -516,7 +577,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as exc:                    # noqa: BLE001
                 self._json({"ok": False, "error": str(exc)}, 500)
                 return
-            self._deliver_voice(text)
+            hub.deliver_voice(text)
             self._json({"ok": True, "text": text})
             return
         if action == "start":
@@ -524,37 +585,54 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": False, "error": "语音模型还没下载",
                             "dir": str(asr.model_dir()), "url": asr.MODEL_URL}, 409)
                 return
-            hub.voice.start()
-            hub.broadcast({"type": "voice", "state": "listening"})
+            hub.voice_start()
             self._json({"ok": True, "listening": True})
             return
         if action == "stop":
             try:
-                text = hub.voice.stop()
+                text = hub.voice_stop()
             except Exception as exc:                    # noqa: BLE001
                 hub.broadcast({"type": "voice", "state": "idle"})
                 self._json({"ok": False, "error": str(exc)}, 500)
                 return
-            self._deliver_voice(text)
             self._json({"ok": True, "text": text})
             return
         if action == "cancel":
             hub.voice.cancel()
+            if hub.overlay is not None:
+                hub.overlay.hide()
             hub.broadcast({"type": "voice", "state": "idle"})
             self._json({"ok": True})
             return
         self._json({"ok": False, "error": "未知语音动作"}, 404)
 
-    def _deliver_voice(self, text: str) -> None:
-        """识别结果：直接打进电脑当前窗口 + 记一条运行记录 + 同步给各个界面。"""
+    def _voice_audio(self) -> None:
+        """手机录好一段 WAV 直接 POST 过来 → 用电脑上的离线模型识别 → 文字回给手机。
+
+        手机不装识别模型也能用语音：手机只当麦克风，识别在电脑上做。
+        """
         hub = self.hub
-        text = (text or "").strip()
-        if not text:
-            hub.broadcast({"type": "voice", "state": "idle", "text": ""})
+        query = parse_qs(urlparse(self.path).query)
+        sid = (query.get("sid") or [""])[0]
+        name = (hub.phones.get(sid) or {}).get("name", "手机")
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        if length <= 0 or length > 8 * 1024 * 1024:
+            self._json({"ok": False, "error": "音频长度不对"}, 400)
             return
-        hub.injector.submit("insert", text)
-        hub.log("电脑", "🎤 " + text[:60], "text")
-        hub.broadcast({"type": "voice", "state": "done", "text": text})
+        raw = self.rfile.read(length)
+        started = time.time()
+        try:
+            text = asr.transcribe_wav_bytes(raw)
+        except Exception as exc:                    # noqa: BLE001
+            self._json({"ok": False, "error": "识别失败：%s" % exc}, 500)
+            return
+        took = round(time.time() - started, 2)
+        hub.log(name, "🎤 " + ((text or "（没听清）")[:60]), "text")
+        hub.broadcast({"type": "voice", "state": "done", "text": text, "from": name})
+        self._json({"ok": True, "text": text, "took": took})
 
     def _sse(self) -> None:
         hub = self.hub

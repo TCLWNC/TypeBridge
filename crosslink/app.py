@@ -94,6 +94,8 @@ class CrossLinkApp:
         self.qt = None
         self.window = None
         self.tray = None
+        self._hotkey = None
+        self._hotkey_spec = ""
         self.app_url = ""
         self._stop = threading.Event()
         self._target_cache = {"title": "", "app": "", "self": False}
@@ -134,6 +136,34 @@ class CrossLinkApp:
                 self.tray.refresh()
             except Exception:   # noqa: BLE001
                 pass
+        # 语音热键被改了（或者刚设上）→ 换一个热键注册
+        want = self.cfg.get("voice_hotkey", "")
+        if want != (self._hotkey_spec if self._hotkey else ""):
+            self.setup_hotkey()
+
+    # -- 语音热键 ----------------------------------------------------------
+    def setup_hotkey(self) -> None:
+        """按配置注册全局热键：按一下开始收音，再按一下结束并识别。"""
+        from .hotkey import HotkeyThread, pretty
+
+        old = getattr(self, "_hotkey", None)
+        if old is not None:
+            try:
+                old.stop()
+            except Exception:       # noqa: BLE001
+                pass
+        spec = str(self.cfg.get("voice_hotkey") or "").strip()
+        self._hotkey_spec = spec
+        self._hotkey = None
+        if not spec:
+            self._log("没有设置语音热键（在设置里可以设一个）")
+            self.hub.broadcast({"type": "hotkey", "spec": "", "ok": True})
+            return
+        hk = HotkeyThread(spec, self.hub.voice_toggle, log=self._log)
+        hk.start()
+        self._hotkey = hk
+        self._log("语音热键：%s" % pretty(spec))
+        self.hub.broadcast({"type": "hotkey", "spec": pretty(spec), "ok": True})
 
     # -- 服务 --------------------------------------------------------------
     def start_server(self) -> str:
@@ -248,6 +278,11 @@ class CrossLinkApp:
         self.app_url = url
         self.injector.start()
         self.start_watchers()
+        # 语音热键：配了就注册（全局生效，不需要窗口在前台）
+        try:
+            self.setup_hotkey()
+        except Exception as exc:      # noqa: BLE001
+            self._log("语音热键没注册上：%s" % exc)
         self.hub.log("电脑", "%s v%s 已就绪" % (APP_TITLE, VERSION), "system")
 
         if not winapi.firewall_rule_exists():

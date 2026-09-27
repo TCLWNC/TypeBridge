@@ -208,11 +208,6 @@
       </div>
       <div class="spacer"></div>
       <span class="chip" id="status-chip"><i class="dot" id="status-dot"></i><span id="status-text">等待手机连接</span></span>
-      <button class="btn outline fx" id="btn-voice" title="本地离线语音输入：点一下开始说话，说完自动停">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-          <rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/>
-        </svg>语音输入
-      </button>
       <button class="btn outline fx" id="btn-firewall" title="手机连不上时点这里">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">
           <path d="M12 3l7 3v6c0 4-3 7.5-7 9-4-1.5-7-5-7-9V6l7-3Z"/>
@@ -339,6 +334,22 @@
               <button data-v="zh" class="active">中文</button>
               <button data-v="en">English</button>
             </div>
+          </div>
+        </div>
+
+        <div class="card enter" style="margin-top:16px;animation-delay:120ms">
+          <div class="card-title">语音输入<span class="spacer"></span><span class="chip" id="voice-state">检测中</span></div>
+          <div class="setting">
+            <div class="grow"><div class="t">离线识别</div><div class="d" id="voice-hint">说一句话，文字直接打进当前窗口，不联网</div></div>
+            <button class="btn sm fx" id="btn-voice-test">试一下</button>
+          </div>
+          <div class="setting">
+            <div class="grow"><div class="t">触发热键</div><div class="d">在任何程序里按这个键，开始收音；再按一下结束并输入</div></div>
+            <span class="chip brand" id="hotkey-show">F9</span>
+            <button class="btn sm fx" id="btn-hotkey-set">按下新键</button>
+          </div>
+          <div class="setting">
+            <div class="grow"><div class="t">正在收音时</div><div class="d">屏幕下方会出现一条声纹，跟着你说话起伏</div></div>
           </div>
         </div>
 

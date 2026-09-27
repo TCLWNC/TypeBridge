@@ -50,6 +50,30 @@
     "没听到说话": "No speech detected",
     "语音已输入：": "Voice text inserted: ",
     "语音模型还没下载": "The speech model has not been downloaded yet",
+    "可用": "Ready",
+    "正在收音": "Listening",
+    "缺少模型": "Model missing",
+    "离线识别": "Offline recognition",
+    "说一句话，文字直接打进当前窗口，不联网":
+      "Say something - the text goes straight into the focused window, offline",
+    "试一下": "Try it",
+    "结束收音": "Stop listening",
+    "触发热键": "Hotkey",
+    "在任何程序里按这个键，开始收音；再按一下结束并输入":
+      "Press it anywhere to start listening; press again to stop and type it",
+    "未设置": "not set",
+    "按下新键": "Set key",
+    "按你要的键…": "Press a key…",
+    "现在按一下想用的键（Esc 取消）": "Press the key you want now (Esc cancels)",
+    "已取消": "Cancelled",
+    "字母和数字要配 Ctrl 或 Alt，避免和打字冲突":
+      "Letters and digits need Ctrl or Alt so they do not clash with typing",
+    "热键已设为 ": "Hotkey set to ",
+    "还差语音模型：先运行 Get-Voice-Model.bat（约 228MB）":
+      "The speech model is missing: run Get-Voice-Model.bat first (about 228 MB)",
+    "正在收音时": "While listening",
+    "屏幕下方会出现一条声纹，跟着你说话起伏":
+      "A waveform appears at the bottom of the screen and follows your voice",
 
     /* ---- pairing code ---- */
     "配对码": "Pairing code",

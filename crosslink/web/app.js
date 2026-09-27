@@ -431,6 +431,11 @@
       const lang = window.I18N.set(state.lang);
       if (window.__paintLang) window.__paintLang(lang);
     }
+    if (state.voice) {
+      window.__voiceState = state.voice;
+      if (typeof state.voice.listening === "boolean") voiceListening = state.voice.listening;
+      paintVoice(state.voice);
+    }
     if (state.app) {
       $("pc-name").textContent = state.app.name || "我的电脑";
       $("ver").textContent = "v" + state.app.version;
@@ -510,6 +515,9 @@
       else if (msg.type === "pin") renderPin(msg.pin, true);
       else if (msg.type === "urls") applyState({ urls: msg.urls });
       else if (msg.type === "voice") onVoiceEvent(msg);
+      else if (msg.type === "hotkey") {
+        if (voiceCard.hotkey) voiceCard.hotkey.textContent = msg.spec || "未设置";
+      }
       else if (msg.type === "state") applyState(msg);
       else if (msg.type === "quit") {
         toast("电脑端已退出");
@@ -543,40 +551,100 @@
       toast("复制失败，请手动选中地址复制");
     }
   };
-  /* ---------------- 语音输入（电脑本地离线识别） ---------------- */
-  const voiceBtn = $("btn-voice");
+  /* ---------------- 语音输入（设置里的那一项 + 全局热键） ---------------- */
   let voiceListening = false;
-  function paintVoice() {
-    if (!voiceBtn) return;
-    voiceBtn.classList.toggle("primary", voiceListening);
-    voiceBtn.textContent = voiceListening ? "正在听…（点一下结束）" : "语音输入";
+  let capturingHotkey = false;
+  const voiceCard = {
+    state: $("voice-state"),
+    hint: $("voice-hint"),
+    test: $("btn-voice-test"),
+    hotkey: $("hotkey-show"),
+    setKey: $("btn-hotkey-set"),
+  };
+
+  function paintVoice(v) {
+    if (voiceCard.state) {
+      voiceCard.state.textContent = voiceListening
+        ? "正在收音" : (v && v.ready ? "可用" : "缺少模型");
+      voiceCard.state.className = "chip " +
+        (voiceListening ? "ok" : (v && v.ready ? "brand" : "warn"));
+    }
+    if (voiceCard.test) voiceCard.test.textContent = voiceListening ? "结束收音" : "试一下";
+    if (voiceCard.hotkey && v && typeof v.hotkey === "string") {
+      voiceCard.hotkey.textContent = v.hotkey || "未设置";
+    }
+    if (voiceCard.hint && v && !v.ready) {
+      voiceCard.hint.textContent = "还差语音模型：先运行 Get-Voice-Model.bat（约 228MB）";
+    }
   }
-  if (voiceBtn) {
-    voiceBtn.onclick = async () => {
+
+  function onVoiceEvent(msg) {
+    voiceListening = msg.state === "listening";
+    paintVoice(window.__voiceState);
+    if (msg.state === "done" && msg.text) toast("语音已输入：" + msg.text.slice(0, 40));
+  }
+
+  if (voiceCard.test) {
+    voiceCard.test.onclick = async () => {
       if (!voiceListening) {
         const r = await api("/api/pc/voice", { action: "start" });
         if (r && r.ok) {
-          voiceListening = true;
-          paintVoice();
           toast("正在听…说完会自动停");
         } else {
           toast("语音不可用：" + ((r && r.error) || "未知原因"));
         }
       } else {
-        voiceListening = false;
-        paintVoice();
         const r = await api("/api/pc/voice", { action: "stop" });
         if (r && r.ok) toast(r.text ? ("识别：" + r.text) : "没听到说话");
         else toast("识别失败：" + ((r && r.error) || ""));
       }
     };
   }
-  // 电脑端识别完/被取消时，按钮状态跟着回来
-  function onVoiceEvent(msg) {
-    voiceListening = msg.state === "listening";
-    paintVoice();
-    if (msg.state === "done" && msg.text) toast("语音已输入：" + msg.text.slice(0, 40));
+
+  /* 热键：点「按下新键」之后，按什么键就绑什么键 */
+  const KEY_ALIAS = {
+    " ": "Space", ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left",
+    ArrowRight: "Right", Control: null, Alt: null, Shift: null, Meta: null,
+  };
+  function hotkeySpec(ev) {
+    if (KEY_ALIAS[ev.key] === null) return null;      // 光按修饰键不算
+    if (ev.key === "Escape") return "";
+    const parts = [];
+    if (ev.ctrlKey) parts.push("Ctrl");
+    if (ev.altKey) parts.push("Alt");
+    if (ev.shiftKey) parts.push("Shift");
+    if (ev.metaKey) parts.push("Win");
+    let k = KEY_ALIAS[ev.key] !== undefined ? KEY_ALIAS[ev.key] : ev.key;
+    if (k === null) return null;
+    k = k.length === 1 ? k.toUpperCase() : k.toUpperCase();
+    parts.push(k);
+    return parts.join("+");
   }
+  if (voiceCard.setKey) {
+    voiceCard.setKey.onclick = () => {
+      capturingHotkey = true;
+      voiceCard.setKey.textContent = "按你要的键…";
+      toast("现在按一下想用的键（Esc 取消）");
+    };
+  }
+  document.addEventListener("keydown", (ev) => {
+    if (!capturingHotkey) return;
+    const spec = hotkeySpec(ev);
+    if (spec === null) return;                        // 还在按修饰键
+    ev.preventDefault();
+    capturingHotkey = false;
+    voiceCard.setKey.textContent = "按下新键";
+    if (spec === "") {
+      toast("已取消");
+      return;
+    }
+    if (!/[+]|^F\d+$/.test(spec)) {
+      toast("字母和数字要配 Ctrl 或 Alt，避免和打字冲突");
+      return;
+    }
+    setSetting({ voice_hotkey: spec });
+    toast("热键已设为 " + spec);
+  });
 
   $("btn-firewall").onclick = () => {
     dialog({

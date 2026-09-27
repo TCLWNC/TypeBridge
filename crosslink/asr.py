@@ -103,6 +103,26 @@ def transcribe_file(path: str) -> str:
     return transcribe(audio, rate)
 
 
+def transcribe_wav_bytes(data: bytes) -> str:
+    """手机录好一段 WAV 直接发过来时用这个（不进磁盘）。"""
+    import io
+    import wave
+
+    import numpy as np
+
+    with wave.open(io.BytesIO(data), "rb") as fh:
+        rate = fh.getframerate()
+        channels = fh.getnchannels()
+        width = fh.getsampwidth()
+        raw = fh.readframes(fh.getnframes())
+    if width != 2:
+        raise ValueError("只支持 16 位 PCM WAV")
+    audio = np.frombuffer(raw, dtype=np.int16).astype("float32") / 32768.0
+    if channels > 1:
+        audio = audio.reshape(-1, channels).mean(axis=1)
+    return transcribe(audio, rate)
+
+
 class VoiceSession:
     """一次"按住说话"：开一个线程录音，边说边判静音，说完自动停。"""
 
@@ -113,6 +133,8 @@ class VoiceSession:
         self._text = ""
         self._error = ""
         self.recording = False
+        # 实时音量（0..1），声纹窗口用它画波形
+        self.level = 0.0
 
     # -- 对外 --------------------------------------------------------------
     def start(self) -> None:
@@ -166,6 +188,7 @@ class VoiceSession:
                     mono = data[:, 0]
                     chunks.append(mono.copy())
                     rms = float(np.sqrt(np.mean(mono ** 2)))
+                    self.level = min(1.0, rms * 12.0)     # 给声纹用，顺手做个放大
                     if rms > 0.012:
                         voiced += block
                         silence = 0.0
@@ -182,6 +205,7 @@ class VoiceSession:
                 self._error = "没有录到声音"
                 return
             audio = np.concatenate(chunks)
+            self.level = 0.0
             if voiced < 0.2:
                 self.log("🎤 没听到说话")
                 self._error = "没有听到说话"

@@ -31,6 +31,28 @@ class Client(private val base: String) {
         return post("/api/op", body)
     }
 
+    /**
+     * 手机当无线麦克风：把录好的 WAV 整段发给电脑，让电脑用它本地的模型识别。
+     * 手机上不需要装任何识别模型。
+     */
+    fun transcribe(sid: String, wav: ByteArray): JSONObject {
+        val body = wav.toRequestBody("audio/wav".toMediaType())
+        val req = Request.Builder()
+            .url("$base/api/voice/audio?sid=$sid")
+            .post(body)
+            .build()
+        // 识别可能要几秒，单独给这个请求设超时（SSE 那条连接是无限等待的）
+        val shortClient = http.newBuilder()
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .build()
+        shortClient.newCall(req).execute().use { res ->
+            val text = res.body?.string().orEmpty()
+            return if (text.isBlank()) JSONObject().put("ok", false)
+            else JSONObject(text)
+        }
+    }
+
     private fun post(path: String, body: String): JSONObject {
         val req = Request.Builder().url(base + path)
             .post(body.toRequestBody(json)).build()

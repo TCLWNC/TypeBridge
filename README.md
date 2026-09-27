@@ -64,6 +64,9 @@ ports `8788-8800`. Without that, phones cannot find the computer.
 - Optional 4-digit pairing code for new phones (custom rounded dialog, auto-connect at 4 digits)
 - Connection animation when a device is picked; a phone that is killed or swiped away
   disappears from the PC device list within about 6 seconds
+- **Voice input**: the mic button next to the PC name turns the phone into a wireless
+  microphone — record, send the clip to the PC, and the recognised text comes back into
+  the phone's input box (then it syncs to the PC like anything else you type there)
 
 ---
 

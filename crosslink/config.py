@@ -32,6 +32,8 @@ DEFAULTS: dict[str, Any] = {
     "window": [1120, 740],
     # 界面语言："zh" 中文 / "en" English / "" 跟随系统
     "lang": "",
+    # 语音输入热键（全局生效）："F9" / "Ctrl+Alt+Space" 这样，空字符串表示不设
+    "voice_hotkey": "F9",
 }
 
 
