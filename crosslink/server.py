@@ -108,6 +108,12 @@ class Hub:
     def drop_phone(self, sid: str, reason: str = "已断开") -> None:
         with self._lock:
             info = self.phones.pop(sid, None)
+        # 顺手把注入器里这台手机的同步基线清掉：否则它下次连上，
+        # 第一次同步会把上一次留着的文字当"我打过的"退格退掉
+        try:
+            self.injector.forget_session(sid)
+        except Exception:   # noqa: BLE001
+            pass
         if not info:
             return
         self.push_phones()
@@ -410,7 +416,9 @@ class Handler(BaseHTTPRequestHandler):
                 elif kind == "sync":
                     # 手机端把整段文字交过来，电脑端负责让目标窗口变成这段文字
                     text = str(op.get("text", ""))[:4000]
-                    hub.injector.submit("sync", text)
+                    # 带上会话 id：注入器按手机分别记"上次同步的文字"，
+                    # 这样多台手机不会互相把对方打的字退掉
+                    hub.injector.submit("sync", text, sid)
                     typed += len(text)
                     if text:
                         hub.log(name, text[:60].replace("\n", "⏎"), "text")

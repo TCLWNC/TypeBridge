@@ -296,6 +296,9 @@ class Injector(threading.Thread):
         self.restore_clipboard = True
         self.chars = 0
         self._last_len = 0          # 上一次写入的字符数（整段同步用）
+        # 每台手机「上一次同步过来的整段文字」：同步时只回退/补写手机自己打的部分，
+        # 不再 Ctrl+A 全选覆盖（那会把电脑上原有的字一起冲掉）。
+        self._phone_text: dict[str, str] = {}
         self.last_error = ""
         self.log = log or (lambda *_: None)
         self._stop = threading.Event()
@@ -321,7 +324,7 @@ class Injector(threading.Thread):
         if kind == "insert":
             self._text(str(item[1]))
         elif kind == "sync":
-            self._apply_full(str(item[1]))
+            self._apply_sync(str(item[1]), str(item[2]) if len(item) > 2 else "")
         elif kind == "edit":
             if int(item[1]):
                 press_key("BACKSPACE", int(item[1]), self.delay_ms)
@@ -336,27 +339,38 @@ class Injector(threading.Thread):
         else:
             raise InjectError("未知指令 %r" % (kind,))
 
-    def _apply_full(self, text: str) -> None:
-        """整段同步：让目标输入框的内容等于 text。
+    def forget_session(self, key: str) -> None:
+        """手机会话结束时清掉基线，免得下一台/下一次连接被上一段文字回退掉。"""
+        self._phone_text.pop(key, None)
 
-        做法：Ctrl+A 全选 → 直接用 Unicode 输入整段（**不碰剪贴板**）。
-        之前的"全选 + 粘贴"会出现重复：粘贴后我们很快把剪贴板还原，
-        目标程序还没来得及读剪贴板，于是粘到旧内容或没粘上，下一轮又补一遍。
+    def _apply_sync(self, text: str, key: str = "") -> None:
+        """只改「手机自己打的那一部分」，电脑上原有的内容一动不动。
+
+        以前这里是 Ctrl+A 全选再整段重打，好处是内容一定等于手机输入框，
+        代价是把电脑输入框里原本就有的字也一起冲掉了（用户反馈的"把电脑上面
+        输入框里面也有的字冲掉"）。现在改成只处理手机这一段的差异：
+
+          1. 和上一次同步过来的文字求公共前缀 —— 前缀里的字不动；
+          2. 手机删掉的尾巴用退格退掉；
+          3. 手机新打的部分插进去。
+
+        所以光标右边原本存在的文字（比如你先在记事本里写好的一句话）会留在原位，
+        手机清空输入框也只会退掉手机上打的那些字。
         """
-        if not text:
-            try:
-                press_combo("A", ctrl=True)
-                press_key("DELETE")
-            except Exception:   # noqa: BLE001
-                pass
-            self._last_len = 0
+        prev = self._phone_text.get(key, "")
+        if text == prev:
             return
-        try:
-            press_combo("A", ctrl=True)      # 全选，随后输入会整体替换
-            time.sleep(0.03)
-        except Exception:   # noqa: BLE001
-            pass
-        self._text(text)
+        n = 0
+        limit = min(len(prev), len(text))
+        while n < limit and prev[n] == text[n]:
+            n += 1
+        back = len(prev) - n
+        if back > 0:
+            press_key("BACKSPACE", back, self.delay_ms)
+        tail = text[n:]
+        if tail:
+            self._text(tail)
+        self._phone_text[key] = text
         self._last_len = len(text)
 
     def run(self) -> None:

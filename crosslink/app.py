@@ -185,8 +185,8 @@ class CrossLinkApp:
             # 电脑端的在线设备列表也要清理：手机退出/断网后不能一直挂着
             now = time.time()
             # 手机每 5 秒发一次心跳，分两种宽限：
-            #   长连接还挂着       → 12 秒（网络抖动不至于把人踢了）
-            #   长连接已经断了     → 6 秒（手机被划掉/杀掉，进程一死连接就断，
+            #   长连接还挂着       → 10 秒（约两次心跳，网络抖动不至于把人踢了）
+            #   长连接已经断了     → 5 秒（手机被划掉/杀掉，进程一死连接就断，
             #                              这里要立刻把它从列表里去掉）
             # 以前只有 12 秒一种、而且每 10 秒才检查一次，所以划掉 App 之后
             # 电脑端能挂着 20 多秒，看着就像"下线了还显示在线"。
@@ -194,12 +194,12 @@ class CrossLinkApp:
             gone = []
             for sid, info in list(self.hub.phones.items()):
                 age = now - float(info.get("last_at") or info.get("since", now))
-                if age > (12.0 if sid in streams else 6.0):
+                if age > (10.0 if sid in streams else 5.0):
                     gone.append((sid, "已断开（超时未响应）" if sid in streams
                                  else "手机已退出/断网"))
             for sid, why in gone:
                 self.hub.drop_phone(sid, why)
-            self._stop.wait(2.0)
+            self._stop.wait(1.5)
 
     def _watch_mirror(self) -> None:
         """镜像：读电脑当前输入框的文字，推给手机显示（手机端"电脑上：…"）。
