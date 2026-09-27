@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  图标主体：菱形环 + 中心实心菱形。
+  自适应图标的安全区是中间 66dp（直径），四周 18dp 会被系统裁掉/遮罩，
+  所以图形要收在中间：之前外菱形半径 41 几乎铺满 108 画布，桌面上就比别的 App 大一圈。
+  现在整体缩到 0.735 倍：外菱形半径 30、环厚 4.5、中心菱形半径 16。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 菱形环（外菱形挖掉内菱形） -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M54,24 L84,54 L54,84 L24,54 Z M54,28.5 L79.5,54 L54,79.5 L28.5,54 Z" />
+
+    <!-- 中心实心菱形 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,38 L70,54 L54,70 L38,54 Z" />
+</vector>

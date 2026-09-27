@@ -1,0 +1,311 @@
+/* CrossLink 设计系统 · 对齐 LocalSend（Material 3 深色 + 品牌蓝） */
+:root {
+  --bg: #000000;
+  --surface: #101116;
+  --surface-2: #17181F;
+  --card: #1A1B21;
+  --card-hi: #22242C;
+  --card-press: #2A2C36;
+  --line: rgba(255, 255, 255, .07);
+  --line-2: rgba(255, 255, 255, .14);
+  --text: #FFFFFF;
+  --text-2: #C7C9D4;
+  --text-3: #8B8E9D;
+  --primary: #B4C5FF;
+  --primary-hi: #C8D5FF;
+  --on-primary: #0B2A5B;
+  --brand: #00AEFA;
+  --ok: #4CD07D;
+  --warn: #F2C14E;
+  --bad: #FF6B6B;
+  --state: rgba(255, 255, 255, .06);
+  --state-2: rgba(255, 255, 255, .10);
+  --r-xl: 28px;
+  --r-lg: 22px;
+  --r-md: 16px;
+  --r-sm: 12px;
+  --r-full: 999px;
+  --ease: cubic-bezier(.2, 0, 0, 1);
+  --ease-emph: cubic-bezier(.05, .7, .1, 1);
+  --ease-spring: cubic-bezier(.34, 1.4, .64, 1);
+  --d1: 120ms;
+  --d2: 220ms;
+  --d3: 380ms;
+  --shadow: 0 18px 48px rgba(0, 0, 0, .55);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI",
+               "PingFang SC", "Noto Sans SC", sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+body { overflow: hidden; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, .12);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, .22); background-clip: content-box; }
+::-webkit-scrollbar-track { background: transparent; }
+
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; border: 0; background: none; }
+a { color: var(--primary); }
+
+/* ---------- 涟漪 + 按压反馈（LocalSend 的手感） ---------- */
+.fx {
+  position: relative;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--d2) var(--ease),
+              color var(--d2) var(--ease),
+              border-color var(--d2) var(--ease),
+              box-shadow var(--d2) var(--ease),
+              transform var(--d1) var(--ease);
+}
+.fx::after {
+  content: "";
+  position: absolute;
+  left: var(--rx, 50%);
+  top: var(--ry, 50%);
+  width: 8px; height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0;
+  transform: scale(0);
+  pointer-events: none;
+}
+.fx.rippling::after { animation: ripple 520ms var(--ease) forwards; }
+@keyframes ripple {
+  0%   { opacity: .22; transform: scale(0); }
+  60%  { opacity: .12; }
+  100% { opacity: 0; transform: scale(var(--rs, 34)); }
+}
+.fx.pressing { transform: scale(.972); }
+
+/* ---------- 卡片 ---------- */
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 18px;
+  /* 性能：卡片不做过渡。无 GPU 的机器上每次过渡都要重绘整块区域，
+     这是"从启动就卡"的主因之一。 */
+}
+/* 悬停位移 + 大阴影在无 GPU 的机器上每帧都要重绘整块，去掉；只保留文字/底色变化 */
+.card.lift:hover { border-color: var(--line-2); }
+.card-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; letter-spacing: .3px;
+  color: var(--text-3);
+  margin: 0 0 12px;
+}
+.card-title .spacer { flex: 1; }
+
+/* ---------- 按钮 ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 40px; padding: 0 18px;
+  border-radius: var(--r-full);
+  font-size: 14px; font-weight: 600;
+  background: transparent; color: var(--text-2);
+  transition: background-color var(--d2) var(--ease), color var(--d2) var(--ease),
+              transform var(--d1) var(--ease), border-color var(--d2) var(--ease);
+}
+.btn:hover { background: var(--state); color: var(--text); }
+.btn.filled { background: var(--primary); color: var(--on-primary); }
+.btn.filled:hover { background: var(--primary-hi); }
+.btn.tonal { background: rgba(180, 197, 255, .14); color: var(--primary); }
+.btn.tonal:hover { background: rgba(180, 197, 255, .22); }
+.btn.outline { border: 1px solid var(--line-2); }
+.btn.danger { color: var(--bad); }
+.btn.danger:hover { background: rgba(255, 107, 107, .14); }
+.btn.sm { height: 32px; padding: 0 14px; font-size: 13px; }
+.btn.icon { width: 40px; padding: 0; border-radius: 50%; }
+.btn[disabled] { opacity: .45; pointer-events: none; }
+
+/* ---------- 开关 ---------- */
+.switch {
+  --w: 48px; --h: 28px;
+  position: relative; flex: none;
+  width: var(--w); height: var(--h);
+  border-radius: var(--r-full);
+  background: rgba(255, 255, 255, .14);
+  border: 1px solid var(--line-2);
+  transition: background-color var(--d2) var(--ease), border-color var(--d2) var(--ease);
+}
+.switch::before {
+  content: "";
+  position: absolute; top: 3px; left: 3px;
+  width: calc(var(--h) - 8px); height: calc(var(--h) - 8px);
+  border-radius: 50%;
+  background: #E6E7EE;
+  transition: transform var(--d2) var(--ease-spring), background-color var(--d2) var(--ease),
+              width var(--d2) var(--ease);
+}
+.switch.on { background: var(--primary); border-color: transparent; }
+.switch.on::before { transform: translateX(calc(var(--w) - var(--h))); background: var(--on-primary); }
+.switch:active::before { width: calc(var(--h) - 4px); }
+
+/* ---------- 分段控件 ---------- */
+.segmented {
+  position: relative; display: inline-flex; padding: 3px;
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: var(--r-full);
+}
+.segmented .thumb {
+  position: absolute; top: 3px; bottom: 3px; left: 3px;
+  border-radius: var(--r-full);
+  background: rgba(180, 197, 255, .16);
+  transition: transform var(--d2) var(--ease-emph), width var(--d2) var(--ease-emph);
+}
+.segmented button {
+  position: relative; z-index: 1;
+  height: 32px; padding: 0 16px; border-radius: var(--r-full);
+  color: var(--text-3); font-size: 13px; font-weight: 600;
+  transition: color var(--d2) var(--ease);
+}
+.segmented button.active { color: var(--primary); }
+
+/* ---------- 列表行 ---------- */
+.row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  transition: background-color var(--d2) var(--ease), transform var(--d2) var(--ease-emph);
+}
+.row + .row { margin-top: 4px; }
+.row:hover { background: var(--state); }
+.row .grow { flex: 1; min-width: 0; }
+.row .name { font-weight: 600; font-size: 14px; }
+.row .sub { color: var(--text-3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.avatar {
+  flex: none; width: 40px; height: 40px; border-radius: 14px;
+  display: grid; place-items: center;
+  background: rgba(180, 197, 255, .16); color: var(--primary);
+}
+
+/* ---------- 胶囊标签 ---------- */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 10px;
+  border-radius: var(--r-full);
+  background: rgba(255, 255, 255, .07);
+  color: var(--text-2); font-size: 12px; font-weight: 600;
+}
+.chip.ok { background: rgba(76, 208, 125, .16); color: var(--ok); }
+.chip.warn { background: rgba(242, 193, 78, .16); color: var(--warn); }
+.chip.bad { background: rgba(255, 107, 107, .16); color: var(--bad); }
+.chip.brand { background: rgba(0, 174, 250, .16); color: var(--brand); }
+
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); flex: none; }
+.dot.ok { background: var(--ok); }
+.dot.live { position: relative; background: var(--ok); }
+.dot.live::after {
+  content: ""; position: absolute; inset: -4px;
+  border-radius: 50%; border: 2px solid var(--ok);
+  opacity: .45;          /* 原来是无限循环呼吸动画：无 GPU 的机器上会持续重绘导致卡顿，改成静态光晕 */
+}
+@keyframes pulse {
+  0% { opacity: .8; transform: scale(.6); }
+  80% { opacity: 0; transform: scale(1.35); }
+  100% { opacity: 0; }
+}
+
+/* ---------- 入场动画 ---------- */
+.enter { animation: enter var(--d3) var(--ease-emph) both; }
+@keyframes enter {
+  from { opacity: 0; transform: translateY(10px) scale(.99); }
+  to { opacity: 1; transform: none; }
+}
+.pop { animation: pop var(--d2) var(--ease-emph) both; }
+@keyframes pop {
+  from { opacity: 0; transform: scale(.94); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---------- 页面切换（淡出下移 + 淡入上移） ---------- */
+.page { display: none; }
+.page.active { display: block; animation: pageIn var(--d3) var(--ease-emph) both; }
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---------- 弹窗 ---------- */
+.backdrop {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(0, 0, 0, .62);
+  display: grid; place-items: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--d2) var(--ease);
+}
+.backdrop.show { display: grid; opacity: 1; pointer-events: auto; }
+.dialog {
+  width: min(420px, calc(100vw - 48px));
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  padding: 22px;
+  box-shadow: var(--shadow);
+  transform: scale(.92) translateY(8px);
+  transition: transform var(--d3) var(--ease-emph);
+}
+.backdrop.show .dialog { transform: none; }
+
+/* ---------- 提示条 ---------- */
+.toast-wrap {
+  position: fixed; left: 50%; bottom: 28px; z-index: 60;
+  transform: translateX(-50%);
+  display: flex; flex-direction: column; gap: 8px; align-items: center;
+  pointer-events: none;
+}
+.toast {
+  background: #262A35; color: #fff;
+  padding: 10px 18px; border-radius: var(--r-full);
+  font-size: 13px; box-shadow: var(--shadow);
+  animation: toastIn var(--d3) var(--ease-emph) both;
+}
+.toast.out { animation: toastOut var(--d2) var(--ease) both; }
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(14px) scale(.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes toastOut {
+  to { opacity: 0; transform: translateY(10px) scale(.98); }
+}
+
+/* ---------- 输入框 ---------- */
+.field {
+  width: 100%; padding: 12px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  color: var(--text);
+  outline: none;
+  transition: border-color var(--d2) var(--ease), background-color var(--d2) var(--ease);
+}
+.field:focus { border-color: rgba(180, 197, 255, .55); background: #1B1D25; }
+
+.mono { font-family: "Cascadia Mono", "Consolas", ui-monospace, monospace; }
+.muted { color: var(--text-3); }
+
+/* 说明：系统若开了「减少动态效果」，只关掉无意义的循环呼吸动画，
+   页面切换 / 按压反馈这些核心动效保留（LocalSend 的做法也是这样）。 */
+@media (prefers-reduced-motion: reduce) {
+  .dot.live::after, .pulse-ring { animation: none !important; }
+}

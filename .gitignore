@@ -1,0 +1,37 @@
+# 打包产物 / 中间文件（都能重新生成，不要进仓库）
+dist*/
+build/
+CrossLink-PC-win64/
+CrossLink-ondir/
+电脑端/
+发布包/
+源码/
+预览/
+preview/
+reference/
+旧单文件版*.exe
+CrossLink-PC.exe
+CrossLink-ondir.exe
+*.spec
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Android / Gradle
+.gradle/
+local.properties
+*.apk.idsig
+
+# 编辑器 / 系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# 本地配置、日志
+config.json
+crash.txt
+*.log
