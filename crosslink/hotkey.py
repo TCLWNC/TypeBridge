@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ctypes
 import threading
+import time
 from ctypes import wintypes
 
 MOD_ALT = 0x0001
@@ -77,14 +78,23 @@ def pretty(spec: str) -> str:
 
 
 class HotkeyThread(threading.Thread):
-    """注册一个全局热键；按下时回调 on_fire()。换热键就停掉重开一个。"""
+    """注册一个全局热键。
+
+    两种触发方式：
+      mode="hold"    按下开始收音，松开就停（这里用 GetAsyncKeyState 轮询松手）
+      mode="toggle"  按一下开始，再按一下结束
+    换热键或换方式就停掉重开一个。
+    """
 
     _counter = 0
 
-    def __init__(self, spec: str, on_fire, log=None) -> None:
+    def __init__(self, spec: str, on_fire, log=None, mode: str = "toggle",
+                 on_release=None) -> None:
         super().__init__(daemon=True, name="crosslink-hotkey")
         self.spec = spec
         self.on_fire = on_fire
+        self.on_release = on_release
+        self.mode = "hold" if mode == "hold" else "toggle"
         self.log = log or (lambda *_: None)
         self.ok = False
         self._stop = threading.Event()
@@ -123,6 +133,19 @@ class HotkeyThread(threading.Thread):
                         self.on_fire()
                     except Exception as exc:      # noqa: BLE001
                         self.log("热键回调出错：%s" % exc)
+                    if self.mode == "hold" and self.on_release is not None:
+                        # 按住式：盯着这个键什么时候松开（RegisterHotKey 只管按下，
+                        # 松开要自己查）
+                        while not self._stop.is_set():
+                            if not (user32.GetAsyncKeyState(vk) & 0x8000):
+                                break
+                            time.sleep(0.02)
+                        if self._stop.is_set():
+                            break
+                        try:
+                            self.on_release()
+                        except Exception as exc:  # noqa: BLE001
+                            self.log("热键松开回调出错：%s" % exc)
         finally:
             user32.UnregisterHotKey(None, self._id)
             self.ok = False

@@ -34,6 +34,8 @@ DEFAULTS: dict[str, Any] = {
     "lang": "",
     # 语音输入热键（全局生效）："F9" / "Ctrl+Alt+Space" 这样，空字符串表示不设
     "voice_hotkey": "F9",
+    # 语音热键的触发方式："hold" 按住说话（松开即停） / "toggle" 按一下开始、再按一下结束
+    "voice_hotkey_mode": "hold",
 }
 
 

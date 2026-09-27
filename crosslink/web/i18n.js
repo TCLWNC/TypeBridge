@@ -61,6 +61,8 @@
     "触发热键": "Hotkey",
     "在任何程序里按这个键，开始收音；再按一下结束并输入":
       "Press it anywhere to start listening; press again to stop and type it",
+    "在任何程序里按这个键就能说话，不用切回本窗口":
+      "Press it in any program to talk - no need to switch back to this window",
     "未设置": "not set",
     "按下新键": "Set key",
     "按你要的键…": "Press a key…",
@@ -74,6 +76,14 @@
     "正在收音时": "While listening",
     "屏幕下方会出现一条声纹，跟着你说话起伏":
       "A waveform appears at the bottom of the screen and follows your voice",
+    "触发方式": "Trigger",
+    "按住说话": "Hold to talk",
+    "按一下开始": "Press to start",
+    "按住说话，松开就结束识别": "Hold the key to talk; release to finish",
+    "按一下开始收音，再按一下结束并输入":
+      "Press to start listening; press again to stop and type it",
+    "已设为按住说话": "Set to hold-to-talk",
+    "已设为按一下开始": "Set to press-to-start",
 
     /* ---- pairing code ---- */
     "配对码": "Pairing code",

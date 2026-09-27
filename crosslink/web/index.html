@@ -344,9 +344,17 @@
             <button class="btn sm fx" id="btn-voice-test">试一下</button>
           </div>
           <div class="setting">
-            <div class="grow"><div class="t">触发热键</div><div class="d">在任何程序里按这个键，开始收音；再按一下结束并输入</div></div>
+            <div class="grow"><div class="t">触发热键</div><div class="d">在任何程序里按这个键就能说话，不用切回本窗口</div></div>
             <span class="chip brand" id="hotkey-show">F9</span>
             <button class="btn sm fx" id="btn-hotkey-set">按下新键</button>
+          </div>
+          <div class="setting">
+            <div class="grow"><div class="t">触发方式</div><div class="d" id="hotkey-mode-hint">按住说话，松开就结束识别</div></div>
+            <div class="segmented" id="seg-hotmode" style="align-self:flex-start">
+              <div class="thumb"></div>
+              <button data-v="hold" class="active">按住说话</button>
+              <button data-v="toggle">按一下开始</button>
+            </div>
           </div>
           <div class="setting">
             <div class="grow"><div class="t">正在收音时</div><div class="d">屏幕下方会出现一条声纹，跟着你说话起伏</div></div>

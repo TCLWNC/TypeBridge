@@ -234,6 +234,25 @@ class Hub:
         else:
             self.voice_start()
 
+    def voice_hotkey_press(self) -> None:
+        """热键按下：按住式就开始收音，切换式就当作开关。"""
+        if str(self.cfg.get("voice_hotkey_mode", "hold")) == "toggle":
+            self.voice_toggle()
+        elif not self.voice.recording:
+            self.voice_start()
+
+    def voice_hotkey_release(self) -> None:
+        """热键松开：只有"按住式"才在这里结束识别。"""
+        if str(self.cfg.get("voice_hotkey_mode", "hold")) != "hold":
+            return
+        if not self.voice.recording:
+            return
+        try:
+            self.voice_stop()
+        except Exception as exc:            # noqa: BLE001
+            self.log("电脑", "语音识别失败：%s" % exc, "warn")
+            self.broadcast({"type": "voice", "state": "idle"})
+
     def deliver_voice(self, text: str) -> None:
         """识别结果：直接打进电脑当前窗口 + 记一条运行记录 + 同步给各个界面。"""
         text = (text or "").strip()
@@ -256,6 +275,7 @@ class Hub:
             # 语音输入的状态：模型在不在、热键是什么、当前是否在收音
             "voice": {"ready": asr.model_ready(),
                       "hotkey": self.cfg.get("voice_hotkey", ""),
+                      "hotkey_mode": self.cfg.get("voice_hotkey_mode", "hold"),
                       "listening": bool(self.voice.recording)},
             "settings": {
                 "inject": self.injector.enabled,
@@ -525,7 +545,8 @@ class Handler(BaseHTTPRequestHandler):
             for key, value in data.items():
                 if key in ("inject", "method", "delay_ms", "restore_clipboard",
                            "topmost", "tray", "autostart", "enter_after_send",
-                           "require_pin", "name", "lang", "voice_hotkey"):
+                           "require_pin", "name", "lang", "voice_hotkey",
+                           "voice_hotkey_mode"):
                     changed[key] = value
             hub.apply_settings(changed)
             self._json({"ok": True, "state": hub.state(hub.mobile_url)})

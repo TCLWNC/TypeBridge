@@ -189,8 +189,10 @@
     return move;
   }
   const segs = [...document.querySelectorAll(".segmented")];
-  // #seg-lang 是语言切换，不是"输入方式"，别让通用分段控件把方法也一起改了
-  segs.filter((s) => s.id !== "seg-lang").forEach(initSegmented);
+  // #seg-lang（界面语言）和 #seg-hotmode（语音触发方式）各有自己的处理，
+  // 别让通用分段控件把它们当成"输入方式"改掉
+  segs.filter((s) => s.id !== "seg-lang" && s.id !== "seg-hotmode")
+      .forEach(initSegmented);
 
   /* ---------------- 界面语言 ---------------- */
   const segLang = $("seg-lang");
@@ -576,6 +578,39 @@
     if (voiceCard.hint && v && !v.ready) {
       voiceCard.hint.textContent = "还差语音模型：先运行 Get-Voice-Model.bat（约 228MB）";
     }
+    if (v && typeof v.hotkey_mode === "string") paintHotkeyMode(v.hotkey_mode);
+  }
+
+  /* 触发方式：按住说话 / 按一下开始 */
+  const segHot = $("seg-hotmode");
+  function paintHotkeyMode(mode) {
+    if (!segHot) return;
+    const want = mode === "toggle" ? "toggle" : "hold";
+    segHot.querySelectorAll("button").forEach((b) => {
+      b.classList.toggle("active", b.dataset.v === want);
+    });
+    const active = segHot.querySelector("button.active");
+    const thumb = segHot.querySelector(".thumb");
+    if (active && thumb) {
+      thumb.style.width = `${active.offsetWidth}px`;
+      thumb.style.transform = `translateX(${active.offsetLeft - 3}px)`;
+    }
+    const hint = $("hotkey-mode-hint");
+    if (hint) {
+      hint.textContent = want === "hold"
+        ? "按住说话，松开就结束识别"
+        : "按一下开始收音，再按一下结束并输入";
+    }
+  }
+  if (segHot) {
+    segHot.querySelectorAll("button").forEach((b) => {
+      b.addEventListener("click", () => {
+        paintHotkeyMode(b.dataset.v);
+        setSetting({ voice_hotkey_mode: b.dataset.v });
+        toast(b.dataset.v === "hold" ? "已设为按住说话" : "已设为按一下开始");
+      });
+    });
+    window.__paintHotkeyMode = paintHotkeyMode;
   }
 
   function onVoiceEvent(msg) {

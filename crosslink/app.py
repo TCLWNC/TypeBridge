@@ -96,6 +96,7 @@ class CrossLinkApp:
         self.tray = None
         self._hotkey = None
         self._hotkey_spec = ""
+        self._hotkey_mode = ""
         self.app_url = ""
         self._stop = threading.Event()
         self._target_cache = {"title": "", "app": "", "self": False}
@@ -136,9 +137,11 @@ class CrossLinkApp:
                 self.tray.refresh()
             except Exception:   # noqa: BLE001
                 pass
-        # 语音热键被改了（或者刚设上）→ 换一个热键注册
-        want = self.cfg.get("voice_hotkey", "")
-        if want != (self._hotkey_spec if self._hotkey else ""):
+        # 语音热键或触发方式被改了（或者刚设上）→ 重新注册
+        want = (str(self.cfg.get("voice_hotkey") or ""),
+                str(self.cfg.get("voice_hotkey_mode") or "hold"))
+        have = (self._hotkey_spec, self._hotkey_mode) if self._hotkey else ("", "")
+        if want != have:
             self.setup_hotkey()
 
     # -- 语音热键 ----------------------------------------------------------
@@ -154,16 +157,21 @@ class CrossLinkApp:
                 pass
         spec = str(self.cfg.get("voice_hotkey") or "").strip()
         self._hotkey_spec = spec
+        self._hotkey_mode = str(self.cfg.get("voice_hotkey_mode") or "hold")
         self._hotkey = None
         if not spec:
             self._log("没有设置语音热键（在设置里可以设一个）")
             self.hub.broadcast({"type": "hotkey", "spec": "", "ok": True})
             return
-        hk = HotkeyThread(spec, self.hub.voice_toggle, log=self._log)
+        mode = str(self.cfg.get("voice_hotkey_mode") or "hold")
+        hk = HotkeyThread(spec, self.hub.voice_hotkey_press, log=self._log,
+                          mode=mode, on_release=self.hub.voice_hotkey_release)
         hk.start()
         self._hotkey = hk
-        self._log("语音热键：%s" % pretty(spec))
-        self.hub.broadcast({"type": "hotkey", "spec": pretty(spec), "ok": True})
+        self._log("语音热键：%s（%s）"
+                  % (pretty(spec), "按住说话" if mode == "hold" else "按一下开始"))
+        self.hub.broadcast({"type": "hotkey", "spec": pretty(spec),
+                            "mode": mode, "ok": True})
 
     # -- 服务 --------------------------------------------------------------
     def start_server(self) -> str:
