@@ -6,8 +6,9 @@
 <title>TypeBridge · 跨屏输入</title>
 <link rel="stylesheet" href="/assets/base.css" />
 <style>
-  body { background: var(--bg); }
-  .shell { display: flex; height: 100vh; }
+  /* 用 100% 而不是 100vh：窗口在高 DPI 缩放下不会多出/少一条白边 */
+  html, body { height: 100%; margin: 0; background: var(--bg); overflow: hidden; }
+  .shell { display: flex; height: 100%; min-height: 0; background: var(--bg); }
 
   /* 左侧导航条 */
   .rail {
@@ -58,7 +59,7 @@
 
   /* 首页 */
   .grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; }
-  @media (max-width: 1080px) { .grid { grid-template-columns: 1fr; } }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
 
   .qr-card { display: flex; gap: 18px; align-items: center; }
   .qr-box {
