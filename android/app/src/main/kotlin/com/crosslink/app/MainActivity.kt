@@ -67,6 +67,8 @@ class MainActivity : Activity() {
     private lateinit var input: EditText
     private lateinit var counter: TextView
     private var lblMirror: TextView? = null
+    private var updLine: TextView? = null          // 「关于」里的软件更新一行
+    private var promptedUpdate = ""                // 这次启动已经提示过的版本
     private lateinit var notice: TextView
     private lateinit var targetText: TextView
     private lateinit var pcName: TextView
@@ -414,13 +416,16 @@ class MainActivity : Activity() {
             setOnClickListener { openUrl("https://github.com/TCLWNC/TypeBridge") }
         }, lp(top = 4, matchWidth = true))
         cfg.addView(TextView(this).apply {
-            text = "看看有没有新版本"
+            text = "打开发布页"
             textSize = 12f
             setTextColor(C_PRIMARY)
             setPadding(0, dp(4), 0, 0)
             isClickable = true
             setOnClickListener { openUrl("https://github.com/TCLWNC/TypeBridge/releases") }
         }, lp(top = 2, matchWidth = true))
+        // 版本情况由电脑端查（手机不自己连 GitHub），查到有新版会弹窗提示
+        updLine = label("软件更新：等电脑端检查…", 12f, C_MUTED)
+        cfg.addView(updLine, lp(top = 6, matchWidth = true))
         // 「发送后自动回车」和「断开」放进设置页（输入页保持干净）
         val setRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1048,12 +1053,49 @@ class MainActivity : Activity() {
         dlg.show()
     }
 
+    /**
+     * 电脑端查出新版本之后：写进「关于」那一行，并且弹一次窗提示更新。
+     * 每次启动只提示一次同一个版本（promptedUpdate 记着），不然会一直弹。
+     */
+    private fun applyUpdate(upd: JSONObject?) {
+        if (upd == null) return
+        val latest = upd.optString("latest")
+        val current = upd.optString("current")
+        val newer = upd.optBoolean("newer")
+        runOnUiThread {
+            updLine?.text = when {
+                !upd.optBoolean("ok") ->
+                    "软件更新：" + upd.optString("error").ifEmpty { "检查失败" }
+                newer -> "软件更新：电脑端有新版本 v$latest（当前 v$current）"
+                else -> "软件更新：已是最新版本 v$current"
+            }
+            if (newer && latest.isNotEmpty() && latest != promptedUpdate && !isFinishing) {
+                promptedUpdate = latest
+                runCatching {
+                    android.app.AlertDialog.Builder(this)
+                        .setTitle("发现新版本 v$latest")
+                        .setMessage("现在用的是 v$current。\n新版本已经发布，建议更新后再用。")
+                        .setPositiveButton("去下载") { _, _ ->
+                            openUrl(upd.optString("url").ifEmpty {
+                                "https://github.com/TCLWNC/TypeBridge/releases" })
+                        }
+                        .setNegativeButton("稍后", null)
+                        .show()
+                }
+            }
+        }
+    }
+
     private fun onEvent(ev: JSONObject) {
         val type = ev.optString("type")
         if (type == "state" || type == "settings") {
             val s = if (type == "settings") ev.optJSONObject("state") else ev
             val name = s?.optJSONObject("app")?.optString("name").orEmpty()
             if (name.isNotEmpty()) runOnUiThread { if (::pcName.isInitialized) pcName.text = name }
+            // 电脑端查到的版本情况，直接搬到「关于」里显示，手机自己不去连 GitHub
+            applyUpdate(s?.optJSONObject("update"))
+        } else if (type == "update") {
+            applyUpdate(ev.optJSONObject("update"))
         }
         val target = when (type) {
             "mirror" -> {

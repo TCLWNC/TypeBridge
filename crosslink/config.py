@@ -36,6 +36,8 @@ DEFAULTS: dict[str, Any] = {
     "voice_hotkey": "F9",
     # 语音热键的触发方式："hold" 按住说话（松开即停） / "toggle" 按一下开始、再按一下结束
     "voice_hotkey_mode": "hold",
+    # 启动时自动去 GitHub 看一眼有没有新版本（只查、不下、不装）
+    "check_updates": True,
 }
 
 

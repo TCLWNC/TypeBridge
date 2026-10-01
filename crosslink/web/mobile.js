@@ -153,9 +153,12 @@
         if (state && state.app && $("about-ver")) {
           $("about-ver").textContent = "v" + state.app.version;
         }
+        if (state && state.update) paintUpdate(state.update);
         $("sw-enter").classList.toggle("on", !!settings.enter_after_send);
       } else if (msg.type === "target") {
         renderTarget(msg.target);
+      } else if (msg.type === "update") {
+        paintUpdate(msg.update);
       } else if (msg.type === "urls" && msg.urls[0]) {
         $("addr").textContent = msg.urls[0];
       }
@@ -189,6 +192,16 @@
     bar.className = "target ok";
     dot.className = "dot ok";
     $("target-text").textContent = "电脑已就绪：" + (target.title || target.app);
+  }
+
+  /** 电脑端那边查到的版本情况，照实显示（查不到就说查不到） */
+  function paintUpdate(info) {
+    const el = $("upd-text");
+    if (!el || !info) return;
+    if (!info.checked_at) el.textContent = "还没检查过";
+    else if (!info.ok) el.textContent = info.error || "检查失败";
+    else if (info.newer) el.textContent = "电脑端有新版本 v" + info.latest + "（当前 v" + info.current + "）";
+    else el.textContent = "已是最新版本 v" + info.current;
   }
 
   /* ---------------- 发送 ----------------

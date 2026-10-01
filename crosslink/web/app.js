@@ -249,6 +249,8 @@
   bindSwitch("sw-top", "topmost");
   bindSwitch("sw-tray", "tray");
   bindSwitch("sw-auto", "autostart", (on) => toast(on ? "已设置开机自启" : "已取消开机自启"));
+  bindSwitch("sw-update", "check_updates",
+             (on) => toast(on ? "会自动检查新版本" : "已关闭自动检查更新"));
   // 「需要配对码」单独处理：以服务端返回的状态为准，失败必须明确提示，
   // 否则开关会"看着点不动"（本地翻转后被状态回灌覆盖，用户不知道发生了什么）。
   $("sw-pin").addEventListener("click", async () => {
@@ -474,6 +476,8 @@
     $("sw-top").classList.toggle("on", !!s.topmost);
     $("sw-tray").classList.toggle("on", !!s.tray);
     $("sw-auto").classList.toggle("on", !!s.autostart);
+    const swUpdate = $("sw-update");
+    if (swUpdate) swUpdate.classList.toggle("on", s.check_updates !== false);
     // 注意：require_pin 不在 settings 子对象里，它是 state 的顶层字段，
     // 以前在 applySettings 里读它永远是 undefined，于是开关被强行渲染成"关闭"
     // —— 这就是「点了打不开」的真正原因。这里只负责开关以外的设置项。
@@ -522,6 +526,8 @@
         if (voiceCard.hotkey) voiceCard.hotkey.textContent = msg.spec || "未设置";
       }
       else if (msg.type === "state") applyState(msg);
+      // 后台自动查到的结果：界面就地更新，不用等下一次完整状态
+      else if (msg.type === "update") paintUpdate(msg.update);
       else if (msg.type === "quit") {
         toast("电脑端已退出");
         setTimeout(() => window.close(), 400);
@@ -570,11 +576,83 @@
     if (state.voice) {
       set("about-model", state.voice.ready ? "已就绪" : "未下载");
     }
+    if (state.update) paintUpdate(state.update);
+  }
+
+  /* ---- 新版本：自动查到的和手动查到的，都走这一条显示逻辑 ---- */
+  let updateInfo = null;
+  function paintUpdate(info) {
+    if (!info) return;
+    updateInfo = info;
+    const hint = $("update-hint");
+    const btn = $("btn-check-update");
+    const badge = $("update-badge");
+    if (hint) {
+      if (!info.checked_at) {
+        hint.textContent = "还没检查过";
+      } else if (!info.ok) {
+        hint.textContent = info.error || "检查失败，稍后再试";
+      } else if (info.newer) {
+        hint.textContent = "有新版本 v" + info.latest + "（当前 v" + info.current + "）";
+      } else {
+        hint.textContent = "已是最新版本 v" + info.current;
+      }
+    }
+    if (btn) btn.textContent = (info.ok && info.newer) ? "去下载" : "检查更新";
+    if (badge) badge.classList.toggle("on", !!(info.ok && info.newer));
+    maybePromptUpdate(info);
+  }
+
+  /* 查到新版本就弹一次窗（同一个版本每次启动只弹一次，不当复读机）。 */
+  let updatePrompted = "";
+  function maybePromptUpdate(info) {
+    if (!info || !info.ok || !info.newer) return;
+    const ver = String(info.latest || "");
+    if (!ver || ver === updatePrompted) return;
+    updatePrompted = ver;
+    dialog({
+      title: "发现新版本 v" + ver,
+      body: "现在用的是 v" + (info.current || "") + "。\n"
+          + "新版本已经发布，建议更新后再用。\n"
+          + "（点「去下载」会打开发布页，装不装由你决定）",
+      actions: [
+        { label: "稍后", style: "outline" },
+        {
+          label: "去下载",
+          style: "primary",
+          onClick: () => openUrl(info.url || (REPO_URL + "/releases")),
+        },
+      ],
+    });
+  }
+
+  async function checkUpdate() {
+    const btn = $("btn-check-update");
+    if (!btn) return;
+    // 已经查到新版本了：这个按钮变成"去下载"
+    if (updateInfo && updateInfo.ok && updateInfo.newer) {
+      openUrl(updateInfo.url || (REPO_URL + "/releases"));
+      return;
+    }
+    const before = btn.textContent;
+    btn.textContent = "检查中…";
+    btn.disabled = true;
+    const res = await api("/api/pc/update", {});
+    btn.disabled = false;
+    if (res && res.update) {
+      paintUpdate(res.update);
+    } else {
+      btn.textContent = before;
+      paintUpdate({ ok: false, checked_at: Date.now() / 1000, current: "",
+                    error: (res && res.error) || "检查失败，稍后再试" });
+    }
   }
   const openUrl = (url) => api("/api/pc/open", { url });
   if ($("btn-repo")) {
     $("btn-repo").onclick = () => openUrl(REPO_URL);
-    $("btn-releases").onclick = () => openUrl(REPO_URL + "/releases");
+  }
+  if ($("btn-check-update")) {
+    $("btn-check-update").onclick = checkUpdate;
   }
 
   /* ---------------- 语音输入（设置里的那一项 + 全局热键） ---------------- */

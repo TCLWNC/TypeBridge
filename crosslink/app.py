@@ -204,6 +204,31 @@ class CrossLinkApp:
                          name="crosslink-mirror").start()
         threading.Thread(target=self._watch_network, daemon=True,
                          name="crosslink-net").start()
+        threading.Thread(target=self._watch_updates, daemon=True,
+                         name="crosslink-update").start()
+
+    def _watch_updates(self) -> None:
+        """开机自动查一次有没有新版本，之后每 6 小时查一次。
+
+        放在界面起来之后再查（先等 4 秒），而且是独立线程：
+        网络慢或者 GitHub 连不上的时候，界面一点都不受影响。
+        """
+        if not self.cfg.get("check_updates", True):
+            return
+        if self._stop.wait(4.0):
+            return
+        while not self._stop.is_set():
+            try:
+                info = self.hub.check_update(background=True)
+                if info.get("newer"):
+                    self.hub.log("电脑", "发现新版本 v%s，在「关于」里可以打开发布页"
+                                 % info.get("latest"), "system")
+            except Exception as exc:      # noqa: BLE001
+                self._log("检查更新出错：%s" % exc)
+            # 6 小时一次；期间被关掉就直接退出
+            for _ in range(6 * 60 * 6):
+                if self._stop.wait(10.0):
+                    return
 
     def _watch_foreground(self) -> None:
         while not self._stop.is_set():

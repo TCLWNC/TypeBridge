@@ -206,6 +206,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
         <circle cx="12" cy="12" r="9"/><path d="M12 11v5.5"/><path d="M12 7.6h.01"/>
       </svg><span>关于</span>
+      <i class="badge" id="update-badge">新</i>
     </button>
     <div class="spacer"></div>
     <div class="ver" id="ver">v1.0.0</div>
@@ -346,6 +347,10 @@
               <button data-v="en">English</button>
             </div>
           </div>
+          <div class="setting">
+            <div class="grow"><div class="t">自动检查更新</div><div class="d">启动时和每 6 小时问一次 GitHub，只查版本号</div></div>
+            <button class="switch on" id="sw-update" role="switch"></button>
+          </div>
         </div>
 
         <div class="card enter" style="margin-top:16px;animation-delay:120ms">
@@ -416,8 +421,11 @@
               <button class="btn sm fx" id="btn-repo">打开 GitHub</button>
             </div>
             <div class="setting">
-              <div class="grow"><div class="t">检查更新</div><div class="d">打开 releases 页面看有没有新版本</div></div>
-              <button class="btn sm fx" id="btn-releases">查看发布页</button>
+              <div class="grow">
+                <div class="t">软件更新</div>
+                <div class="d" id="update-hint">点右边就去 GitHub 比一比版本号</div>
+              </div>
+              <button class="btn sm fx" id="btn-check-update">检查更新</button>
             </div>
           </div>
           <!-- 本机信息单独一张卡：以前和「关于」挤在同一张卡里，宽窗口下网格

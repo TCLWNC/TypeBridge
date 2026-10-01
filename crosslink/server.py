@@ -57,6 +57,34 @@ class Hub:
         self.started_at = time.time()
         self._subs: list[queue.Queue] = []
         self._lock = threading.Lock()
+        # 新版本检查的结果（后台线程填，界面照实显示，没查过就写"还没检查"）
+        self.update_info: dict = {
+            "ok": False, "current": VERSION, "latest": "", "newer": False,
+            "url": "", "checked_at": 0, "error": "还没检查过",
+        }
+        self._update_busy = threading.Lock()
+
+    # -- 新版本检查 --------------------------------------------------------
+    def check_update(self, background: bool = False) -> dict:
+        """问一次 GitHub 有没有新版本；同一时间只允许一次检查在跑。"""
+        if not self._update_busy.acquire(blocking=not background):
+            return dict(self.update_info)
+        try:
+            from . import update as update_mod
+            info = update_mod.check(VERSION)
+            self.update_info = info
+            self.broadcast({"type": "update", "update": info})
+            if not background:
+                # 手动检查才写日志，免得后台每次轮询都往记录里塞一条
+                if not info.get("ok"):
+                    self.log("电脑", info.get("error") or "检查更新失败", "system")
+                elif info.get("newer"):
+                    self.log("电脑", "发现新版本 v%s" % info.get("latest"), "system")
+                else:
+                    self.log("电脑", "已是最新版本 v%s" % VERSION, "system")
+            return dict(info)
+        finally:
+            self._update_busy.release()
 
     # -- 设置 --------------------------------------------------------------
     def apply_settings(self, changed: dict) -> None:
@@ -288,12 +316,15 @@ class Hub:
                 "tray": self.cfg["tray"],
                 "autostart": self.cfg["autostart"],
                 "enter_after_send": self.cfg["enter_after_send"],
+                "check_updates": bool(self.cfg.get("check_updates", True)),
             },
             "phones": self.phone_list(),
             "logs": list(self.logs),
             "target": self.target,
             "chars": self.injector.chars,
             "focused": bool(self.phones),
+            # 新版本检查的结果：界面拿它显示"已是最新 / 有新版本 vX"
+            "update": dict(self.update_info),
         }
 
 
@@ -594,7 +625,7 @@ class Handler(BaseHTTPRequestHandler):
                 if key in ("inject", "method", "delay_ms", "restore_clipboard",
                            "topmost", "tray", "autostart", "enter_after_send",
                            "require_pin", "name", "lang", "voice_hotkey",
-                           "voice_hotkey_mode"):
+                           "voice_hotkey_mode", "check_updates"):
                     changed[key] = value
             hub.apply_settings(changed)
             self._json({"ok": True, "state": hub.state(hub.mobile_url)})
@@ -627,6 +658,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
             winapi.open_url(target)
             self._json({"ok": True})
+        elif action == "update":
+            # 「关于」页那个"检查更新"按钮：就地查一次，结果直接回给界面
+            info = hub.check_update(background=False)
+            self._json({"ok": bool(info.get("ok")), "update": info})
         elif action == "quit":
             self._json({"ok": True})
             hub.broadcast({"type": "quit"})
