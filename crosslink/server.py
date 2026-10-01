@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import io
+import glob
 import json
 import os
 import queue
@@ -373,6 +374,44 @@ class Handler(BaseHTTPRequestHandler):
         ext = os.path.splitext(name)[1].lower()
         self._send(200, body, MIME.get(ext, "application/octet-stream"))
 
+    def _apk(self) -> None:
+        """把安卓安装包直接发给手机：手机上扫码打开页面，点一下就能装。
+
+        省掉「先拷到手机、再用文件管理器找」这一圈；adb 连不上的时候
+        这是最省事的装法。
+        """
+        from .config import _base_dir
+        names = ("TypeBridge-1.1.0-android.apk", "TypeBridge-android.apk", "app-debug.apk")
+        roots = [os.path.join(_base_dir(), "apk"), _base_dir(),
+                 os.path.dirname(os.path.abspath(__file__))]
+        path = ""
+        for root in roots:
+            if not os.path.isdir(root):
+                continue
+            for name in names:
+                cand = os.path.join(root, name)
+                if os.path.exists(cand):
+                    path = cand
+                    break
+            if not path:                     # 名字变了也能找到：目录里随便一个 apk
+                found = sorted(glob.glob(os.path.join(root, "*.apk")))
+                if found:
+                    path = found[0]
+            if path:
+                break
+        if not path:
+            self._send(404, "还没放安卓安装包".encode("utf-8"),
+                       "text/plain; charset=utf-8")
+            return
+        try:
+            with open(path, "rb") as fh:
+                body = fh.read()
+        except OSError:
+            self._send(404, b"not found", "text/plain; charset=utf-8")
+            return
+        self._send(200, body, "application/vnd.android.package-archive",
+                   {"Content-Disposition": 'attachment; filename="TypeBridge-android.apk"'})
+
     # -- GET ---------------------------------------------------------------
     def do_HEAD(self):   # noqa: N802
         self.do_GET()
@@ -395,6 +434,9 @@ class Handler(BaseHTTPRequestHandler):
             self._static("mobile.html")
         elif path.startswith("/assets/"):
             self._static(os.path.basename(path))
+        elif path in ("/apk", "/apk/", "/app.apk", "/TypeBridge-android.apk"):
+            # 手机浏览器直接下载安卓安装包（装在电脑端程序目录的 apk\ 里）
+            self._apk()
         elif path == "/api/events":
             self._sse()
         elif path == "/api/state":

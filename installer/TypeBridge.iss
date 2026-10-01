@@ -65,6 +65,10 @@ Source: "{#SrcDir}\Get-Voice-Model.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SrcDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SrcDir}\FILES.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SrcDir}\crosslink\assets\icon.ico"; DestDir: "{app}\icon"; Flags: ignoreversion
+; 安卓安装包：装完电脑端会自己通过 http://电脑IP:端口/apk 发给手机，
+; 手机上扫码打开页面点一下就能装（adb 连不上时的正路）
+Source: "{#SrcDir}\apk\TypeBridge-1.1.0-android.apk"; DestDir: "{app}\apk"; \
+  Flags: ignoreversion
 
 [Icons]
 Name: "{group}\TypeBridge（跨屏输入）"; Filename: "{app}\{#AppExe}"; IconFilename: "{app}\icon\icon.ico"
