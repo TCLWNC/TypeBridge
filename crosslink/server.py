@@ -227,6 +227,7 @@ class Hub:
             from .overlay import WaveOverlay
             # 传频谱（16 段）给声纹，画出来才是"跟着说话起伏"的波形
             self.overlay = WaveOverlay(bars=lambda: self.voice.bars,
+                                       state=lambda: self.voice.state,
                                        log=lambda t: self.log("电脑", t, "warn"))
             self.overlay.start()
         return self.overlay
@@ -244,6 +245,9 @@ class Hub:
 
     def voice_stop(self) -> str:
         """停止录音 → 识别 → 文字打进当前窗口。"""
+        # 松手之后到出结果之间模型要认字（1~3 秒）。这段时间告诉各个界面
+        # "正在识别"，声纹浮层也会从频谱切成走波，不然那几根条就冻住了。
+        self.broadcast({"type": "voice", "state": "recognizing"})
         try:
             text = self.voice.stop()
         finally:
@@ -306,7 +310,9 @@ class Hub:
             "voice": {"ready": asr.model_ready(),
                       "hotkey": self.cfg.get("voice_hotkey", ""),
                       "hotkey_mode": self.cfg.get("voice_hotkey_mode", "hold"),
-                      "listening": bool(self.voice.recording)},
+                      "listening": bool(self.voice.recording),
+                      # idle / listening / recognizing —— 界面照这个显示状态
+                      "state": self.voice.state},
             "settings": {
                 "inject": self.injector.enabled,
                 "method": self.injector.method,

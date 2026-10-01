@@ -209,6 +209,12 @@ class VoiceSession:
         self.level = 0.0
         # 实时频谱（16 段），声纹画的就是这个
         self.bars = [0.0] * Spectrum.BUCKETS
+        # 声纹浮层照这个决定画什么：
+        #   "idle"        没在收
+        #   "listening"   正在收音 —— 画跟着说话起伏的频谱
+        #   "recognizing" 松手了、模型还在认字 —— 画"正在识别"的走波
+        # （以前没有这个状态，松手后频谱没人更新，条子就冻在最后一帧）
+        self.state = "idle"
 
     # -- 对外 --------------------------------------------------------------
     def start(self, auto_stop: bool = True) -> None:
@@ -219,6 +225,7 @@ class VoiceSession:
         self._text = ""
         self._error = ""
         self.recording = True
+        self.state = "listening"
         self._thread = threading.Thread(target=self._run, daemon=True,
                                         name="crosslink-voice")
         self._thread.start()
@@ -243,6 +250,7 @@ class VoiceSession:
         self.recording = False
         self._thread = None
         self._text = ""
+        self.state = "idle"
 
     # -- 内部 --------------------------------------------------------------
     def _run(self) -> None:
@@ -290,6 +298,8 @@ class VoiceSession:
                 self.log("🎤 没听到说话")
                 self._error = "没有听到说话"
                 return
+            # 到这里就不录音了，接下来是模型认字：让声纹切成"正在识别"
+            self.state = "recognizing"
             t0 = time.time()
             self._text = transcribe(audio, SAMPLE_RATE)
             self.log("🎤 识别完成 %.1fs：%s" % (time.time() - t0, self._text[:60]))
@@ -298,3 +308,4 @@ class VoiceSession:
             self.log("🎤 " + self._error)
         finally:
             self.recording = False
+            self.state = "idle"

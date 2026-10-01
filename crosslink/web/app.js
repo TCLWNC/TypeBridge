@@ -438,6 +438,7 @@
     if (state.voice) {
       window.__voiceState = state.voice;
       if (typeof state.voice.listening === "boolean") voiceListening = state.voice.listening;
+      if (typeof state.voice.state === "string") voicePhase = state.voice.state;
       paintVoice(state.voice);
     }
     paintAbout(state);
@@ -657,6 +658,7 @@
 
   /* ---------------- 语音输入（设置里的那一项 + 全局热键） ---------------- */
   let voiceListening = false;
+  let voicePhase = "idle";        // idle / listening / recognizing
   let capturingHotkey = false;
   const voiceCard = {
     state: $("voice-state"),
@@ -668,12 +670,20 @@
 
   function paintVoice(v) {
     if (voiceCard.state) {
-      voiceCard.state.textContent = voiceListening
-        ? "正在收音" : (v && v.ready ? "可用" : "缺少模型");
+      // 松手之后模型还要认一两秒的字，这一段显示"正在识别"，
+      // 别让用户以为点完就没事了（声纹浮层同时会切成走波）
+      voiceCard.state.textContent = voicePhase === "listening" ? "正在收音"
+        : voicePhase === "recognizing" ? "正在识别"
+        : (v && v.ready ? "可用" : "缺少模型");
       voiceCard.state.className = "chip " +
-        (voiceListening ? "ok" : (v && v.ready ? "brand" : "warn"));
+        (voicePhase === "listening" ? "ok"
+          : voicePhase === "recognizing" ? "brand"
+          : (v && v.ready ? "brand" : "warn"));
     }
-    if (voiceCard.test) voiceCard.test.textContent = voiceListening ? "结束收音" : "试一下";
+    if (voiceCard.test) {
+      voiceCard.test.textContent = voicePhase === "listening" ? "结束收音"
+        : voicePhase === "recognizing" ? "识别中…" : "试一下";
+    }
     if (voiceCard.hotkey && v && typeof v.hotkey === "string") {
       voiceCard.hotkey.textContent = v.hotkey || "未设置";
     }
@@ -717,6 +727,9 @@
 
   function onVoiceEvent(msg) {
     voiceListening = msg.state === "listening";
+    if (msg.state === "listening" || msg.state === "recognizing" || msg.state === "idle") {
+      voicePhase = msg.state;
+    }
     paintVoice(window.__voiceState);
     if (msg.state === "done" && msg.text) toast("语音已输入：" + msg.text.slice(0, 40));
   }

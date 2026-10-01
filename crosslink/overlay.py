@@ -26,7 +26,11 @@ BAR_W = 4
 BAR_GAP = 3
 BAR_MIN, BAR_MAX = 3.0, 18.0
 BAR_RADIUS = 2
-WINDOW_W, WINDOW_H = 184, 40
+# 窗口比之前高一点：多出来的那一行留给"正在识别"这四个字
+WINDOW_W, WINDOW_H = 184, 58
+BAR_CENTER_Y = 22              # 竖条的竖中位置（逻辑像素）
+LABEL_Y = 46                   # 标签基线
+RECOG_PERIOD_MS = 900.0        # "正在识别"走波一圈的时间
 BOTTOM_OFFSET = 120
 ARM_MS = 900.0                 # 待命动画周期
 ARM_DELAYS = [0, 75, 150, 225, 300, 225, 150, 75, 0]
@@ -71,9 +75,16 @@ def _make_colorkey(win: tk.Toplevel) -> None:
 class WaveOverlay(threading.Thread):
     """bars() 返回 16 个 0..1 的频段值；show()/hide() 控制显示。"""
 
-    def __init__(self, bars, log=None) -> None:
+    def __init__(self, bars, log=None, state=None) -> None:
         super().__init__(daemon=True, name="crosslink-overlay")
         self.bars = bars
+        # state() 返回 "listening" / "recognizing" / "idle"：
+        # 收音时画频谱，松手等模型认字时改画"正在识别"的走波（不传就一直是收音）
+        self.state = state or (lambda: "listening")
+        # 自查用：一共画了多少帧、上一帧每根条多高。
+        # selftest 靠它证明"识别期间的条子确实在动"，而不是冻在最后一帧。
+        self.frames = 0
+        self.last_heights = [0.0] * BARS
         self.log = log or (lambda *_: None)
         self._show = threading.Event()
         self._hide = threading.Event()
@@ -112,7 +123,7 @@ class WaveOverlay(threading.Thread):
 
             total = BARS * bw + (BARS - 1) * gap
             x0 = (w - total) // 2
-            mid = h // 2
+            mid = int(BAR_CENTER_Y * k)
             bars_items = []
             for i in range(BARS):
                 bx = x0 + i * (bw + gap)
@@ -121,6 +132,13 @@ class WaveOverlay(threading.Thread):
                     bx, mid - int(BAR_MIN * k), bx + bw, mid + int(BAR_MIN * k),
                     fill=accent, outline="")
                 bars_items.append((bx, rect))
+            # 「正在识别」：松手之后模型在认字，条子改走波 + 底下写一行字，
+            # 免得那几根条冻在最后一帧看着像卡死
+            label = canvas.create_text(
+                w // 2, int(LABEL_Y * k), text="正在识别",
+                fill=accent, font=("Microsoft YaHei UI", max(8, int(11 * k))),
+                state="hidden")
+            labelling = False
 
             win.deiconify()
             self._root = root
@@ -142,12 +160,15 @@ class WaveOverlay(threading.Thread):
                     canvas.itemconfigure(rect, fill=fill)
 
             def tick() -> None:
-                nonlocal shown, opened
+                nonlocal shown, opened, labelling
                 if self._hide.is_set():
                     self._hide.clear()
                     if shown:
                         win.withdraw()
                         shown = False
+                        if labelling:
+                            canvas.itemconfigure(label, state="hidden")
+                            labelling = False
                 if self._show.is_set():
                     if not shown:
                         win.deiconify()
@@ -158,22 +179,53 @@ class WaveOverlay(threading.Thread):
                         values = list(self.bars())[:BARS]
                     except Exception:             # noqa: BLE001
                         values = []
+                    try:
+                        phase_state = str(self.state())
+                    except Exception:             # noqa: BLE001
+                        phase_state = "listening"
                     arming = (time.time() - opened) * 1000.0 < 600.0
                     now_ms = time.time() * 1000.0
+                    if phase_state == "recognizing" and not arming:
+                        if not labelling:
+                            canvas.itemconfigure(label, state="normal")
+                            labelling = True
+                        heights = []
+                        for i in range(BARS):
+                            # 一条匀速横穿的波：一段高一段低地走过去，
+                            # 一眼就能看出"还在干活"，而不是冻住
+                            phase = ((now_ms % RECOG_PERIOD_MS) / RECOG_PERIOD_MS
+                                     + i * 0.11) % 1.0
+                            wave = 0.5 - 0.5 * math.cos(2 * math.pi * phase)
+                            tall = (BAR_MIN + (BAR_MAX - BAR_MIN) * 0.8 * wave) * k
+                            heights.append(tall)
+                            place(i, tall, accent)
+                        self.last_heights = heights
+                        self.frames += 1
+                        root.after(50, tick)
+                        return
+                    if labelling:
+                        canvas.itemconfigure(label, state="hidden")
+                        labelling = False
+                    heights = []
                     for i in range(BARS):
                         if arming:
                             # Handy 的待命：6px 基准 × 0.55~1.5 的呼吸，每根条错开
                             phase = ((now_ms - ARM_DELAYS[i]) % ARM_MS) / ARM_MS
                             wave = 0.5 - 0.5 * math.cos(2 * math.pi * phase)
                             scale = ARM_SCALE_MIN + (ARM_SCALE_MAX - ARM_SCALE_MIN) * wave
-                            place(i, ARM_BASE * scale * k, muted)
+                            tall = ARM_BASE * scale * k
+                            heights.append(tall)
+                            place(i, tall, muted)
                             continue
                         target = float(values[i]) if i < len(values) else 0.0
                         # Handy 的指数平滑（0.7 / 0.3），再套它的高度公式
                         smooth[i] = smooth[i] * 0.7 + target * 0.3
                         tall = max(BAR_MIN,
                                    min(BAR_MAX, BAR_MIN + (smooth[i] ** 0.7) * 15.0))
+                        heights.append(tall * k)
                         place(i, tall * k, accent)
+                    self.last_heights = heights
+                    self.frames += 1
                 root.after(50, tick)
 
             root.after(50, tick)
