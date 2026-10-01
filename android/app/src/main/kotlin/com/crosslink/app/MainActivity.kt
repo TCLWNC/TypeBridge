@@ -396,7 +396,8 @@ class MainActivity : Activity() {
         val verName = runCatching {
             packageManager.getPackageInfo(packageName, 0).versionName
         }.getOrNull().orEmpty()
-        cfg.addView(label("v$verName · 即打即输 / 编辑后发送 / 16 个功能键", 11.5f, C_MUTED),
+        // 这里以前写着「16 个功能键」——多按键早就删了，别再挂一个不存在的功能
+        cfg.addView(label("v$verName · 即打即输 / 编辑后发送", 11f, C_MUTED),
             lp(top = 8, matchWidth = true))
         // —— 关于 ——
         cfg.addView(label("关于", 13f, C_MUTED, true), lp(top = 16, matchWidth = true))

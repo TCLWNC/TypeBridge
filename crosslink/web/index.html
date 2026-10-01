@@ -103,14 +103,19 @@
   .stat b { display: block; font-size: 20px; font-weight: 700; color: var(--primary); }
   .stat span { color: var(--text-3); font-size: 11.5px; }
 
-  .target-card .big {
+  /* 这条原来写成 .target-card .big —— 只有「输入」页那张卡吃得到，
+     于是「关于」页里同样写法的头部一点样式都没有：没有底、没有描边、
+     版本号还跟标题一样大。改成公共类，两处一个长相。 */
+  .big {
     display: flex; align-items: center; gap: 12px;
     padding: 14px; border-radius: var(--r-md);
     background: var(--surface-2); border: 1px solid var(--line);
   }
-  .target-card .big .avatar { width: 46px; height: 46px; border-radius: 15px; }
-  .target-card .app { font-size: 15px; font-weight: 600; }
-  .target-card .title { color: var(--text-3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .big .avatar { width: 46px; height: 46px; border-radius: 15px; }
+  .big img.logo { width: 48px; height: 48px; border-radius: 12px; flex: none; }
+  .big .app { font-size: 15px; font-weight: 600; }
+  .big .title { color: var(--text-3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .target-card .tag { margin-top: 12px; }
   .target-card .tag { margin-top: 12px; }
 
   .log-list { max-height: 300px; overflow-y: auto; padding-right: 4px; }
@@ -394,10 +399,10 @@
         <div class="grid">
           <div class="card lift enter">
             <div class="card-title">关于</div>
-            <div class="big" style="display:flex;align-items:center;gap:14px">
-              <img src="/assets/icon.png" alt="TypeBridge" width="56" height="56" style="border-radius:14px" />
+            <div class="big">
+              <img class="logo" src="/assets/icon.png" alt="TypeBridge" width="48" height="48" />
               <div style="min-width:0">
-                <div class="app" style="font-size:17px">TypeBridge · 跨屏输入</div>
+                <div class="app">TypeBridge · 跨屏输入</div>
                 <div class="title" id="about-ver">v1.1.0</div>
               </div>
             </div>
@@ -414,7 +419,11 @@
               <div class="grow"><div class="t">检查更新</div><div class="d">打开 releases 页面看有没有新版本</div></div>
               <button class="btn sm fx" id="btn-releases">查看发布页</button>
             </div>
-            <div class="card-title" style="margin-top:16px">本机信息</div>
+          </div>
+          <!-- 本机信息单独一张卡：以前和「关于」挤在同一张卡里，宽窗口下网格
+               右半边整片空着，看着像没排完版 -->
+          <div class="card enter" style="animation-delay:60ms">
+            <div class="card-title">本机信息</div>
             <div class="setting">
               <div class="grow"><div class="t">服务端口</div><div class="d">手机和电脑之间走这个端口的 HTTP，同网段可用</div></div>
               <span class="chip" id="about-port">8788</span>
@@ -428,7 +437,7 @@
               <span class="chip" id="about-model">检测中</span>
             </div>
             <div class="setting">
-              <div class="grow"><div class="t">软件许可</div><div class="d">第三方组件：pywebview、pystray、qrcode、Pillow、sherpa-onnx、sounddevice</div></div>
+              <div class="grow"><div class="t">第三方组件</div><div class="d">pywebview、pystray、qrcode、Pillow、numpy、sherpa-onnx、sounddevice，可选 Qt 界面用 PySide6；全部按各自许可证分发</div></div>
             </div>
           </div>
         </div>
