@@ -3,6 +3,7 @@
   const $ = (id) => document.getElementById(id);
   let sid = null;
   let sent = "";              // 已经镜像到电脑的文字（即打即输的基线）
+  let acked = "";             // 电脑端确认收到的文字（兜底重发用）
   let lastSent = "";          // 最近一次完整发送，供「还原」用
   let mode = "live";
   let timer = null;
@@ -36,6 +37,14 @@
       el.classList.add("out");
       setTimeout(() => el.remove(), 240);
     }, ms);
+  };
+
+  /** 输入页底下那行提示（和 App 的 notice 一样） */
+  const say = (text, warn = false) => {
+    const el = $("notice");
+    if (!el) return;
+    el.textContent = text || "";
+    el.className = warn ? "notice warn" : "notice";
   };
 
   /* ---------------- 涟漪 ---------------- */
@@ -82,8 +91,13 @@
       try { savedLang = localStorage.getItem("crosslink.lang"); } catch (e) { /* 忽略 */ }
       if (window.I18N) window.I18N.set(savedLang || res.lang);
       $("pc-name").textContent = res.pc || "电脑";
-      $("gate").classList.add("hide");
-      setTimeout(() => $("gate").remove(), 420);
+      // 会话过期重新握手时这个连接页早就不在了，得判空，
+      // 不然这里抛异常，整条"重连并补发"的路都会断掉（字就同步不上去了）
+      const gate = $("gate");
+      if (gate) {
+        gate.classList.add("hide");
+        setTimeout(() => gate.remove(), 420);
+      }
       subscribe();
       return true;
     }
@@ -107,8 +121,12 @@
   });
 
   /* ---------------- 事件流 ---------------- */
+  let es = null;
+
   function subscribe() {
-    const es = new EventSource("/api/events");
+    // 重新握手时会再调一次：先把上一条连接关掉，不然页面里会挂两条流
+    if (es) { try { es.close(); } catch (e) { /* 忽略 */ } }
+    es = new EventSource("/api/events");
     es.onmessage = (e) => {
       let msg;
       try {
@@ -143,12 +161,13 @@
       }
     };
     es.onerror = () => {
-      $("status").textContent = "连接中断，正在重连…";
-      $("dot").className = "dot";
+      // 和 App 一样：连不上只在状态行提示一句，页面别的地方不动
+      const s = $("status");
+      if (s) { s.textContent = "连接中断，正在重连…"; s.className = "status warn"; }
     };
     es.onopen = () => {
-      $("status").textContent = "已连接 · 电脑端在线";
-      $("dot").className = "dot live";
+      const s = $("status");
+      if (s) { s.textContent = ""; s.className = "status"; }
     };
   }
 
@@ -156,54 +175,62 @@
     const bar = $("target-bar");
     const dot = $("target-dot");
     if (!target || !target.app) {
-      bar.className = "target-bar";
+      bar.className = "target";
       dot.className = "dot";
       $("target-text").textContent = "先在电脑上点一下要输入的窗口";
       return;
     }
     if (target.self) {
-      bar.className = "target-bar warn";
+      bar.className = "target";
       dot.className = "dot";
       $("target-text").textContent = "电脑焦点在 CrossLink 自己身上，点一下目标程序";
       return;
     }
-    bar.className = "target-bar ready";
+    bar.className = "target ok";
     dot.className = "dot ok";
     $("target-text").textContent = "电脑已就绪：" + (target.title || target.app);
   }
 
-  /* ---------------- 发送 ---------------- */
-  async function send(ops) {
-    if (!sid) return;
-    let res = await post("/api/op", { sid, ops });
-    if (res.ok === false && String(res.error || "").indexOf("会话") >= 0) {
-      // 电脑端重启过 / 会话过期：重新握手再发一次。
-      // 以前这里是 location.reload()，结果是"打一个字页面就刷新、字还没了"，
-      // 用户看到的就是"一直不断刷新"。
-      const again = await hello(($("pin-input") || {}).value || "");
-      if (again) res = await post("/api/op", { sid, ops });
-    }
-    if (res.ok === false && res.error) {
-      toast(res.error);
-    }
+  /* ---------------- 发送 ----------------
+     一条指令一条指令按顺序发：以前打完字就发一条，两条请求会同时在路上，
+     电脑端先收到后发的那条、后收到先发的那条，最后那段字就少一截。
+     现在所有指令串成一条链，前一条发完才发下一条。 */
+  let chain = Promise.resolve();
+
+  function send(ops) {
+    chain = chain.then(() => sendOnce(ops)).catch(() => {});
+    return chain;
   }
 
-  const diff = (a, b) => {
-    let i = 0;
-    const max = Math.min(a.length, b.length);
-    while (i < max && a[i] === b[i]) i++;
-    let j = 0;
-    while (j < max - i && a[a.length - 1 - j] === b[b.length - 1 - j]) j++;
-    return { del: a.length - i - j, ins: b.slice(i, b.length - j) };
-  };
+  async function sendOnce(ops) {
+    if (!sid) return;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const res = await post("/api/op", { sid, ops });
+      if (res && res.ok) {
+        ops.forEach((op) => {
+          if (op.k === "sync") acked = op.text;
+          if (op.k === "reset") acked = "";
+        });
+        return;
+      }
+      // 会话过期（电脑端重启过 / 断过网）：重新握手，再重发这一条
+      if (res && String(res.error || "").indexOf("会话") >= 0) {
+        if (await hello(($("pin-input") || {}).value || "")) continue;
+      }
+      // 网络抖了一下：等一下再试，别把这段字直接丢掉
+      await new Promise((r) => setTimeout(r, 120 * (attempt + 1)));
+    }
+    say("这段没同步上，正在重试…", true);
+  }
 
   function flushLive() {
     const value = $("input").value;
     if (value === sent) return;
-    const { del, ins } = diff(sent, value);
     sent = value;
-    if (del === 0 && !ins) return;
-    send([{ k: "edit", del: Math.min(del, 200), ins }]);
+    if (value) lastSent = value;
+    // 和 App 完全一样：整段交给电脑端，由电脑端自己算该退几个字、补哪些字。
+    // 以前在手机端算差量，删超过 200 字会被截断，越打越对不上。
+    send([{ k: "sync", text: value }]);
   }
 
   $("input").addEventListener("input", () => {
@@ -227,28 +254,33 @@
       mode = b.dataset.v;
       if (mode === "batch") {
         sent = $("input").value;
-        $("btn-send").innerHTML = sendIcon + "发送到电脑";
-        toast("编辑好以后点「发送到电脑」");
+        $("btn-send").textContent = "发送";
+        say("编辑好以后点「发送」");
       } else {
         sent = $("input").value;
-        $("btn-send").innerHTML = enterIcon + "敲回车";
-        toast("即打即输：打的字立刻出现在电脑上");
+        $("btn-send").textContent = "输入";
+        say("即打即输：打的字立刻出现在电脑上");
       }
     };
   });
-  const sendIcon = $("btn-send").innerHTML;
-  const enterIcon = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M9 10v6h10"/><path d="M19 16V8a2 2 0 0 0-2-2h-3"/><path d="M14 9l3-3-3-3"/></svg>`;
 
   /* ---------------- 底部按钮 ---------------- */
   $("btn-send").onclick = async () => {
     const value = $("input").value;
     if (mode === "batch") {
-      if (!value) return toast("先写点字再发送");
+      if (!value) return say("先写点字再发送", true);
       await send([{ k: "insert", text: value }, ...(settings.enter_after_send ? [{ k: "key", key: "ENTER" }] : [])]);
       lastSent = value;
-      toast("已发送到电脑");
+      say("已发送到电脑");
     } else {
-      await send([{ k: "key", key: "ENTER" }]);
+      // 和 App 一样：这个键就是敲一次回车（文字由输入框实时同步）
+      await send([{ k: "key", key: "ENTER" }, { k: "reset" }]);
+      lastSent = value;
+      $("input").value = "";
+      sent = "";
+      acked = "";
+      $("counter").textContent = "0 字";
+      say("已敲回车，输入框已清空（可用「恢复」找回）");
     }
     if (navigator.vibrate) navigator.vibrate(12);
   };
@@ -256,48 +288,30 @@
   $("btn-clear").onclick = () => {
     $("input").value = "";
     sent = "";
+    // 电脑端的同步基线一起归零，下一段字不会把电脑上已有的内容退掉
+    send([{ k: "reset" }]);
     $("counter").textContent = "0 字";
-    toast("已清空手机输入框（电脑上的内容没动）");
+    say("已清空手机输入框（电脑上的内容没动）");
   };
 
   $("btn-restore").onclick = () => {
     const text = lastSent || "";
-    if (!text) return toast("还没有发送过内容");
+    if (!text) return say("还没有发送过内容", true);
     $("input").value = text;
     $("counter").textContent = `${text.length} 字`;
-    if (mode === "live") sent = text;
-    toast("已还原上次发送的内容");
+    // 故意不把 sent 设成 text：设了就等于"内容没变化"，电脑端不会有任何反应，
+    // 用户点了「恢复」却什么都没发生（以前就是这个"纯空壳"）。
+    if (mode === "live") flushLive();
+    say("已还原上次发送的内容（正在同步到电脑）");
   };
 
-  /* ---------------- 功能键 ---------------- */
-  const KEYS = [
-    { label: "⌫", op: { k: "key", key: "BACKSPACE" } },
-    { label: "⏎", op: { k: "key", key: "ENTER" } },
-    { label: "Tab", op: { k: "key", key: "TAB" } },
-    { label: "Esc", op: { k: "key", key: "ESC" } },
-    { label: "←", op: { k: "key", key: "LEFT" } },
-    { label: "↑", op: { k: "key", key: "UP" } },
-    { label: "↓", op: { k: "key", key: "DOWN" } },
-    { label: "→", op: { k: "key", key: "RIGHT" } },
-    { label: "行首", op: { k: "key", key: "HOME" } },
-    { label: "行尾", op: { k: "key", key: "END" } },
-    { label: "全选", op: { k: "combo", key: "A", ctrl: true } },
-    { label: "复制", op: { k: "combo", key: "C", ctrl: true } },
-    { label: "粘贴", op: { k: "combo", key: "V", ctrl: true } },
-    { label: "剪切", op: { k: "combo", key: "X", ctrl: true } },
-    { label: "撤销", op: { k: "combo", key: "Z", ctrl: true } },
-    { label: "保存", op: { k: "combo", key: "S", ctrl: true } },
-    { label: "切窗口", op: { k: "combo", key: "TAB", alt: true } },
-  ];
-  const keysBox = $("keys");
-  KEYS.forEach((item) => {
-    const b = document.createElement("button");
-    b.className = "key";
-    b.textContent = item.label;
-    b.addEventListener("pointerdown", (e) => e.preventDefault());
-    b.onclick = () => send([item.op]);
-    keysBox.appendChild(b);
-  });
+  /* 兜底同步：手机上的文字和电脑端确认收到的对不上就自动补发一次。
+     网络抖一下、会话过期重连，这条路上丢掉的字都能自己找回来。 */
+  setInterval(() => {
+    if (!sid || mode !== "live") return;
+    const value = $("input").value;
+    if (value !== acked) send([{ k: "sync", text: value }]);
+  }, 1200);
 
   /* ---------------- 底部三栏（发送 / 记录 / 设置） ---------------- */
   document.querySelectorAll(".tab[data-page]").forEach((tab) => {

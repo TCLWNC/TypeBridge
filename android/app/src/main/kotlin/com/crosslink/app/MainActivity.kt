@@ -122,6 +122,24 @@ class MainActivity : Activity() {
         } catch (e: Throwable) {
             showCrash(e)
         }
+        // 指令队列的唯一消费者：顺序发、顺序到，电脑端不会收到倒序的文字
+        thread(isDaemon = true, name = "crosslink-ops") { opWorker() }
+        // 兜底同步：万一某一条同步在路上丢了（网络抖一下、会话过期重连），
+        // 只要手机上的文字和电脑端确认收到的对不上，就自动补发一次，
+        // 不用等用户再敲一个字。用户反馈的"文字有时候同步不上去"就是丢在这里。
+        opWatchdog.postDelayed(opWatchdogTask, 1200)
+    }
+
+    private val opWatchdog = android.os.Handler(android.os.Looper.getMainLooper())
+    private val opWatchdogTask = object : Runnable {
+        override fun run() {
+            if (connectedOnce && liveMode && this@MainActivity::input.isInitialized) {
+                val now = input.text.toString()
+                if (now != acked) opQueue.offer(listOf(
+                    JSONObject().put("k", "sync").put("text", now)))
+            }
+            opWatchdog.postDelayed(this, 1200)
+        }
     }
 
     private fun buildShell() {
@@ -712,23 +730,11 @@ class MainActivity : Activity() {
         root.addView(counter, lp(top = 8, matchWidth = true))
         enter(counter, 120L)
 
-        // 功能键收成一个按钮，点开是一个面板（不再占着屏幕一排）
-        // 功能键只留一个入口按钮，点开是面板（屏幕上不再排一长条按键）
-        val keyBar = TextView(this).apply {
-            setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_keys, 0, 0, 0)
-            compoundDrawablePadding = dp(10)
-            text = "多按键"
-            textSize = 14f
-            gravity = Gravity.CENTER
-            setTextColor(C_DIM)
-            background = pressable(C_CARD, 12f, C_LINE)
-            setPadding(dp(14), 0, dp(14), 0)
-            isClickable = true
-            setOnClickListener { showKeysDialog() }
-        }
-        // 一行四格：删除 | 恢复（略宽） | 输入（撑满中间） | 多按键
+        // 一行三格：删除(48) | 恢复(64) | 输入（撑满中间）——多按键已彻底去掉
         val clearBtn = iconButton(R.drawable.ic_delete_trash, "删除") {
             input.setText(""); sent = ""; counter.text = "0 字"
+            // 电脑端的同步基线一起归零：下一段字从零开始算，不会把电脑上已有的字退掉
+            acked = ""; send(listOf(JSONObject().put("k", "reset")))
             if (this@MainActivity::notice.isInitialized) notice.text = "已清空手机输入框（电脑上的内容没动）"
         }
         val restoreBtn = iconButton(R.drawable.ic_restore_undo, "恢复") {
@@ -756,12 +762,14 @@ class MainActivity : Activity() {
         }
         // 短按 = 敲一次回车；按住 0.5 秒 = 转成语音输入，一直按着一直听，松手立刻结束并识别
         fun doEnter() {
-            send(listOf(JSONObject().put("k", "key").put("key", "ENTER")))
+            send(listOf(JSONObject().put("k", "key").put("key", "ENTER"),
+                       JSONObject().put("k", "reset")))
             // 点完之后清空手机输入框——注意要把"已同步基线"也清成空，
             // 否则清空这个动作会被当成一次文本变化同步过去，把电脑上的内容也删掉。
             lastSent = input.text.toString()
             input.setText("")
             sent = ""
+            acked = ""
             counter.text = "0 字"
             if (this@MainActivity::notice.isInitialized) {
                 notice.text = "已敲回车，输入框已清空（可用「恢复」找回）"
@@ -829,37 +837,6 @@ class MainActivity : Activity() {
         // 安全调用：设置页的「发送模式」在未连接时也能点，那时 sendBtn 还没创建，
         // 直接写属性会空指针闪退（你反馈的切换输入方式闪退就是这个）。
         if (this::sendBtn.isInitialized) sendBtn.text = "输入"
-    }
-
-    /** 功能键面板：点一个发一个，面板留着方便连点，右上角关闭。 */
-    private fun showKeysDialog() {
-        val col = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(12), dp(14), dp(8))
-        }
-        col.addView(label("多按键", 15f, C_TEXT, true))
-        col.addView(label("点一个发一个，面板不会自动关", 12f, C_MUTED), lp(top = 8, matchWidth = true))
-        val grid = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-        KEYS.chunked(4).forEach { rowKeys ->
-            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            rowKeys.forEach { (name, op) ->
-                row.addView(chip(name) { send(listOf(op)) },
-                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                        .apply { rightMargin = dp(6); topMargin = dp(6) })
-            }
-            while (row.childCount < 4) {
-                row.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
-            }
-            grid.addView(row)
-        }
-        col.addView(grid, lp(top = 8, matchWidth = true))
-        val dialog = android.app.AlertDialog.Builder(this)
-            .setView(ScrollView(this).apply { addView(col) })
-            .setPositiveButton("关闭", null)
-            .create()
-        dialog.show()
     }
 
     /** 搜索结果里的一行：点一下就连过去 */
@@ -1103,9 +1080,37 @@ class MainActivity : Activity() {
     }
 
     private fun send(ops: List<JSONObject>) {
-        thread {
+        // 所有指令都排进同一个队列、由同一条线程顺序发出：
+        // 以前每敲一次字就新开一条线程，两条请求可能同时在路上，
+        // 电脑端先收到后发的、后收到先发的，最后那段文字就会"少一截"。
+        opQueue.offer(ops)
+    }
+
+    private val opQueue = java.util.concurrent.LinkedBlockingQueue<List<JSONObject>>()
+
+    @Volatile private var acked = ""      // 电脑端确认收到过的文字
+
+    private fun opWorker() {
+        while (true) {
+            val ops = try { opQueue.take() } catch (e: InterruptedException) { continue }
+            try {
+                sendNow(ops)
+            } catch (e: Throwable) {
+                runCatching { logs.add("发送失败：" + e) }
+            }
+        }
+    }
+
+    private fun sendNow(ops: List<JSONObject>) {
+        run {
             val res = runCatching { client.op(sid, ops) }.getOrNull()
             val err = res?.optString("error").orEmpty()
+            if (res != null && res.optBoolean("ok", false)) {
+                // 记下电脑端已经收到的文字：同步一旦丢了，靠这个值做兜底重发
+                ops.forEach { op ->
+                    if (op.optString("k") == "sync") acked = op.optString("text")
+                }
+            }
             if (res != null && !res.optBoolean("ok", true) && err.contains("会话")) {
                 // 会话失效（通常是电脑端重启或网络抖动）：自动重新握手并重发，
                 // 不再把用户踢回设备列表（那样会出现"打一下断一下"）。
@@ -1114,8 +1119,13 @@ class MainActivity : Activity() {
                         androidId())
                     if (h.optBoolean("ok")) {
                         sid = h.optString("sid")
-                        client.op(sid, ops)
-                        true
+                        val r2 = client.op(sid, ops)
+                        if (r2.optBoolean("ok", false)) {
+                            ops.forEach { op ->
+                                if (op.optString("k") == "sync") acked = op.optString("text")
+                            }
+                        }
+                        r2.optBoolean("ok", false)
                     } else false
                 }.getOrDefault(false)
                 if (again) {
@@ -1420,24 +1430,5 @@ class MainActivity : Activity() {
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
-    companion object {
-        private val KEYS: List<Pair<String, JSONObject>> = listOf(
-            "⌫" to JSONObject().put("k", "key").put("key", "BACKSPACE"),
-            "⏎" to JSONObject().put("k", "key").put("key", "ENTER"),
-            "Tab" to JSONObject().put("k", "key").put("key", "TAB"),
-            "Esc" to JSONObject().put("k", "key").put("key", "ESC"),
-            "←" to JSONObject().put("k", "key").put("key", "LEFT"),
-            "↑" to JSONObject().put("k", "key").put("key", "UP"),
-            "↓" to JSONObject().put("k", "key").put("key", "DOWN"),
-            "→" to JSONObject().put("k", "key").put("key", "RIGHT"),
-            "行首" to JSONObject().put("k", "key").put("key", "HOME"),
-            "行尾" to JSONObject().put("k", "key").put("key", "END"),
-            "全选" to JSONObject().put("k", "combo").put("key", "A").put("ctrl", true),
-            "复制" to JSONObject().put("k", "combo").put("key", "C").put("ctrl", true),
-            "粘贴" to JSONObject().put("k", "combo").put("key", "V").put("ctrl", true),
-            "撤销" to JSONObject().put("k", "combo").put("key", "Z").put("ctrl", true),
-            "保存" to JSONObject().put("k", "combo").put("key", "S").put("ctrl", true),
-            "切窗口" to JSONObject().put("k", "combo").put("key", "TAB").put("alt", true),
-        )
-    }
+    companion object
 }

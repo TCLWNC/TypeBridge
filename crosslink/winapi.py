@@ -331,6 +331,9 @@ class Injector(threading.Thread):
             if int(item[1]):
                 press_key("BACKSPACE", int(item[1]), self.delay_ms)
             self._text(str(item[2]))
+        elif kind == "reset":
+            # 手机关掉这一段（敲回车 / 清空）、新开一段：基线归零
+            self.forget_session(str(item[1]) if len(item) > 1 else "")
         elif kind == "key":
             press_key(str(item[1]), int(item[2]) if len(item) > 2 else 1, self.delay_ms)
         elif kind == "combo":

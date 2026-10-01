@@ -508,6 +508,11 @@ class Handler(BaseHTTPRequestHandler):
                     typed += len(text)
                     if text:
                         hub.log(name, text[:60].replace("\n", "⏎"), "text")
+                elif kind == "reset":
+                    # 手机端敲了回车 / 点了清空：那段文字已经交出去了，
+                    # 电脑端要把这台手机的同步基线一起归零，否则下一段字
+                    # 会拿旧基线求差，白白退掉电脑上已有的内容。
+                    hub.injector.submit("reset", sid)
                 elif kind == "key":
                     key = str(op.get("key", "")).upper()[:16]
                     repeat = max(1, min(int(op.get("repeat", 1)), 100))

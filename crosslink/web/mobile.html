@@ -93,6 +93,7 @@
     background: var(--input); border: 1px solid var(--line);
     display: grid; place-items: center; color: var(--dim); flex: none;
   }
+  .iconbtn.wide { width: 64px; }        /* 和 App 一样：恢复比删除宽一点 */
   .iconbtn svg { width: 24px; height: 24px; }
   .actions { display: flex; gap: 8px; margin-top: 8px; }
   .actions .send {
@@ -105,20 +106,23 @@
   .actions .send.listening { background: #F26B6B; color: #fff; }
 
   textarea#input {
-    width: 100%; min-height: 180px; background: var(--input); color: var(--text);
+    width: 100%; min-height: 220px; background: var(--input); color: var(--text);
     border: 1px solid var(--line); border-radius: var(--r-ctl);
     padding: 14px; font-size: 17px; line-height: 1.5; outline: none;
     font-family: inherit; resize: none;
   }
   textarea#input::placeholder { color: var(--muted); }
   .counter { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
-  .target-bar {
-    display: flex; align-items: center; gap: 8px; font-size: 12.5px;
-    color: var(--muted); margin: 0 0 8px;
-  }
-  .target-bar.ready { color: var(--ok); }
+  .notice { font-size: 12px; color: var(--muted); margin-top: 8px; min-height: 16px; line-height: 16px; }
+  .notice.warn { color: #F2C14E; }
+  /* 输入页的头：电脑名 18 / 目标状态 12.5，和 App 的 showInput() 一致 */
+  .head { margin-bottom: 12px; }
+  .pcname { font-size: 18px; line-height: 24px; font-weight: 700; color: var(--text); margin: 0; }
+  .target { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .target.ok { color: var(--ok); }
+  .status { font-size: 11px; color: var(--muted); margin-top: 4px; min-height: 14px; }
+  .status.warn { color: #F2C14E; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
-  .dot.live { background: var(--ok); }
   .dot.ok { background: var(--ok); }
 
   .tabs {
@@ -177,13 +181,6 @@
   .logline span { color: var(--muted); margin-right: 8px; }
   .empty { font-size: 12.5px; color: var(--muted); }
 
-  #keys { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-  #keys button {
-    min-width: 48px; height: 40px; border-radius: var(--r-ctl); font-size: 13px;
-    background: var(--input); color: var(--dim); border: 1px solid var(--line);
-    font-family: inherit; padding: 0 12px;
-  }
-
   .toast-wrap { position: fixed; left: 16px; right: 16px; bottom: 72px; z-index: 60; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
   .toast {
     background: rgba(30,32,40,.96); color: #fff; font-size: 12.5px;
@@ -198,35 +195,33 @@
 <div class="pages">
   <!-- 发送（输入） -->
   <section class="page active" id="page-send">
-    <h1 id="pc-name">正在连接电脑…</h1>
-    <div class="subtitle"><i class="dot live" id="dot"></i> <span id="status">已连接同一 Wi-Fi</span></div>
-    <div class="card">
-      <div class="target-bar" id="target-bar">
+    <!-- 和 App 的输入页完全一致的排布：
+         电脑名 / 目标状态 / 输入框 / 字数 / [删除][恢复][输入] / 提示 -->
+    <div class="head">
+      <h1 class="pcname" id="pc-name">正在连接电脑…</h1>
+      <div class="target" id="target-bar">
         <i class="dot" id="target-dot"></i>
         <span class="grow" id="target-text">先在电脑上点一下要输入的窗口</span>
       </div>
-      <textarea id="input" placeholder="在这里打字…" autocomplete="off" autocorrect="off"
-                autocapitalize="off" spellcheck="false"></textarea>
-      <div class="counter" id="counter">0 字</div>
-      <div class="actions">
-        <button class="iconbtn" id="btn-clear" title="清空输入框">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
-            <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/>
-          </svg>
-        </button>
-        <button class="iconbtn" id="btn-restore" title="还原上次发送的内容">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
-            <path d="M4.5 11A7.5 7.5 0 1 1 7 16.8"/><path d="M4.5 5.5v5.5h5.5"/>
-          </svg>
-        </button>
-        <button class="send" id="btn-send">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
-            <path d="M4 12l16-8-6 8 6 8-16-8Z"/>
-          </svg>发送到电脑
-        </button>
-      </div>
-      <div id="keys"></div>
+      <div class="status" id="status"></div>
     </div>
+    <textarea id="input" placeholder="在这里打字…" autocomplete="off" autocorrect="off"
+              autocapitalize="off" spellcheck="false"></textarea>
+    <div class="counter" id="counter">0 字</div>
+    <div class="actions">
+      <button class="iconbtn" id="btn-clear" title="清空输入框">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+          <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/>
+        </svg>
+      </button>
+      <button class="iconbtn wide" id="btn-restore" title="还原上次发送的内容">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+          <path d="M4.5 11A7.5 7.5 0 1 1 7 16.8"/><path d="M4.5 5.5v5.5h5.5"/>
+        </svg>
+      </button>
+      <button class="send" id="btn-send">输入</button>
+    </div>
+    <div class="notice" id="notice"></div>
   </section>
 
   <!-- 记录 -->
