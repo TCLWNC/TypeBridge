@@ -309,13 +309,15 @@
 
   $("btn-restore").onclick = () => {
     const text = lastSent || "";
-    if (!text) return say("还没有发送过内容", true);
+    if (!text) return say("还没有输入过内容：先打几个字", true);
     $("input").value = text;
     $("counter").textContent = `${text.length} 字`;
-    // 故意不把 sent 设成 text：设了就等于"内容没变化"，电脑端不会有任何反应，
-    // 用户点了「恢复」却什么都没发生（以前就是这个"纯空壳"）。
-    if (mode === "live") flushLive();
-    say("已还原上次发送的内容（正在同步到电脑）");
+    // 显式同步一次：框里本来就是这段字的时候，光 setValue 不会触发任何事，
+    // 用户点了像没反应（"恢复一点用都没有"）。只发 sync 不发 reset，
+    // 电脑端按自己记的基线求差，已经有的那段不会打两遍。
+    sent = text;
+    send([{ k: "sync", text }]);
+    say("已恢复上次输入的内容（已同步到电脑）");
   };
 
   /* 兜底同步：手机上的文字和电脑端确认收到的对不上就自动补发一次。

@@ -744,16 +744,24 @@ class MainActivity : Activity() {
             if (this@MainActivity::notice.isInitialized) notice.text = "已清空手机输入框（电脑上的内容没动）"
         }
         val restoreBtn = iconButton(R.drawable.ic_restore_undo, "恢复") {
-            // 注意花括号：以前写成 "if (空) if (提示已初始化) … else {恢复}"，
-            // else 会绑到内层 if 上，导致恢复永远不执行（用户反馈的"恢复没用"）。
-            if (lastSent.isEmpty()) {
-                if (this@MainActivity::notice.isInitialized) notice.text = "还没有发送过内容"
+            // 恢复 = 把上次交出去的那段字放回输入框，并且**显式**再同步一次。
+            // 以前只 setText 不强制同步：框里本来就是这段字的时候什么都不发生，
+            // 用户点了好像没反应（"恢复一点用都没有"）。
+            // 只发 sync、不发 reset —— 电脑端按自己记的基线求差，已经有的不会打两遍。
+            val text = lastSent
+            if (text.isEmpty()) {
+                if (this@MainActivity::notice.isInitialized) {
+                    notice.text = "还没有输入过内容：先打几个字，再点「输入」或「发送」"
+                }
             } else {
-                // 注意：这里不能把 sent 也设成 lastSent，否则同步逻辑会认为
-                // "内容没变化"而不往电脑发，用户就会觉得"恢复键没用"。
-                input.setText(lastSent)
+                input.setText(text)
                 input.setSelection(input.text.length)
-                if (this@MainActivity::notice.isInitialized) notice.text = "已恢复上次发送的内容（正在同步到电脑）"
+                counter.text = "${text.length} 字"
+                sent = text
+                send(listOf(JSONObject().put("k", "sync").put("text", text)))
+                if (this@MainActivity::notice.isInitialized) {
+                    notice.text = "已恢复上次输入的内容（已同步到电脑）"
+                }
             }
         }
         sendBtn = Button(this).apply {
@@ -781,6 +789,31 @@ class MainActivity : Activity() {
                 notice.text = "已敲回车，输入框已清空（可用「恢复」找回）"
             }
         }
+
+        /**
+         * 编辑后发送：把整段文字一次性交给电脑（可选再敲一次回车），然后清空输入框。
+         * 以前这个模式下短按只发了个回车，一个字都没送出去，`lastSent` 也永远是空的，
+         * 于是「恢复」看起来完全没用。
+         */
+        fun sendBatch() {
+            val text = input.text.toString()
+            if (text.isEmpty()) {
+                if (this@MainActivity::notice.isInitialized) notice.text = "先写点字再发送"
+                return
+            }
+            val ops = mutableListOf<JSONObject>(JSONObject().put("k", "insert").put("text", text))
+            if (enterAfter) ops.add(JSONObject().put("k", "key").put("key", "ENTER"))
+            ops.add(JSONObject().put("k", "reset"))
+            send(ops)
+            lastSent = text
+            input.setText("")
+            sent = ""
+            acked = ""
+            counter.text = "0 字"
+            if (this@MainActivity::notice.isInitialized) {
+                notice.text = "已发送到电脑（可用「恢复」找回）"
+            }
+        }
         sendBtn.setOnTouchListener { view, ev ->
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -805,7 +838,8 @@ class MainActivity : Activity() {
                         recording = false          // 松手即止：录音线程收尾并上传识别
                         paintMic()
                     } else {
-                        doEnter()                  // 短按：还是敲回车
+                        // 短按：即打即输模式就是敲回车；编辑后发送模式要把整段发出去
+                        if (liveMode) doEnter() else sendBatch()
                     }
                     true
                 }
@@ -827,7 +861,8 @@ class MainActivity : Activity() {
         input.addTextChangedListener(object : TextWatcher {
             override fun afterTextChanged(s: Editable?) {
                 counter.text = "${s?.length ?: 0} 字"
-                if (liveMode) flush()
+                // 恢复按钮会自己显式同步一次，这里不要重复排一条，免得一按就发两遍
+                if (liveMode && s?.toString() != sent) flush()
             }
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
@@ -842,7 +877,8 @@ class MainActivity : Activity() {
         batchBtn.setTextColor(if (!liveMode) C_PRIMARY else C_MUTED)
         // 安全调用：设置页的「发送模式」在未连接时也能点，那时 sendBtn 还没创建，
         // 直接写属性会空指针闪退（你反馈的切换输入方式闪退就是这个）。
-        if (this::sendBtn.isInitialized) sendBtn.text = "输入"
+        // 键名跟着模式走：即打即输时它是"敲回车"，编辑后发送时它是"把整段发出去"
+        if (this::sendBtn.isInitialized) sendBtn.text = if (liveMode) "输入" else "发送"
     }
 
     /** 搜索结果里的一行：点一下就连过去 */
