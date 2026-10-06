@@ -114,8 +114,25 @@ def load() -> dict[str, Any]:
     return cfg
 
 
-def save(cfg: dict[str, Any]) -> None:
+def save(cfg: dict[str, Any], keys: list[str] | None = None) -> None:
+    """写配置。
+
+    keys 给了就做"只改这几个键"的合并写：先读盘上现在的值，再把本次改的键盖上去。
+    这样即使有第二个实例（或上一个没关干净的进程）内存里是旧值，
+    它退出时也不会把别人刚改好的设置覆盖回去 ——
+    "设置每次重启都得重设一遍"就是这么来的。
+    """
     data = {k: cfg.get(k, v) for k, v in DEFAULTS.items()}
+    if keys:
+        try:
+            with open(config_path(), "r", encoding="utf-8") as fh:
+                disk = json.load(fh)
+            if isinstance(disk, dict):
+                for k, v in disk.items():
+                    if k in DEFAULTS and k not in keys:
+                        data[k] = v
+        except (OSError, ValueError):
+            pass
     try:
         with open(config_path(), "w", encoding="utf-8") as fh:
             json.dump(data, fh, ensure_ascii=False, indent=2)

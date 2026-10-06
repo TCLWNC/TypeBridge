@@ -774,26 +774,58 @@
     voiceCard.setKey.onclick = () => {
       capturingHotkey = true;
       voiceCard.setKey.textContent = "按你要的键…";
-      toast("现在按一下想用的键（Esc 取消）");
+      toast("按一下想用的键：键盘任意键、或鼠标中键/侧键（Esc 取消）");
     };
   }
+
+  /** 把抓到的键存下来（键盘/鼠标共用这一条路） */
+  function saveHotkey(spec, label) {
+    capturingHotkey = false;
+    if (voiceCard.setKey) voiceCard.setKey.textContent = "按下新键";
+    setSetting({ voice_hotkey: spec });
+    toast("热键已设为 " + label);
+  }
+
   document.addEventListener("keydown", (ev) => {
     if (!capturingHotkey) return;
-    const spec = hotkeySpec(ev);
-    if (spec === null) return;                        // 还在按修饰键
-    ev.preventDefault();
-    capturingHotkey = false;
-    voiceCard.setKey.textContent = "按下新键";
-    if (spec === "") {
+    if (ev.key === "Escape") {
+      ev.preventDefault();
+      capturingHotkey = false;
+      if (voiceCard.setKey) voiceCard.setKey.textContent = "按下新键";
       toast("已取消");
       return;
     }
+    const spec = hotkeySpec(ev);
+    if (spec === null) return;                        // 还在按修饰键
+    ev.preventDefault();
+    if (spec === "") { capturingHotkey = false; return; }
     if (!/[+]|^F\d+$/.test(spec)) {
+      capturingHotkey = false;
+      if (voiceCard.setKey) voiceCard.setKey.textContent = "按下新键";
       toast("字母和数字要配 Ctrl 或 Alt，避免和打字冲突");
       return;
     }
-    setSetting({ voice_hotkey: spec });
-    toast("热键已设为 " + spec);
+    saveHotkey(spec, spec);
+  });
+
+  /* 鼠标中键 / 侧键：RegisterHotKey 只管键盘，鼠标得靠这边的全局钩子 */
+  const MOUSE_BUTTONS = { 1: ["MouseMiddle", "鼠标中键"],
+                          3: ["MouseX1", "鼠标侧键 1"],
+                          4: ["MouseX2", "鼠标侧键 2"] };
+  document.addEventListener("mousedown", (ev) => {
+    if (!capturingHotkey) return;
+    const hit = MOUSE_BUTTONS[ev.button];
+    if (!hit) return;                                 // 左右键不抢，照常用
+    ev.preventDefault();
+    ev.stopPropagation();
+    const mods = [];
+    if (ev.ctrlKey) mods.push("Ctrl");
+    if (ev.altKey) mods.push("Alt");
+    if (ev.shiftKey) mods.push("Shift");
+    saveHotkey(mods.concat(hit[0]).join("+"), mods.concat(hit[1]).join("+"));
+  }, true);
+  document.addEventListener("contextmenu", (ev) => {
+    if (capturingHotkey) ev.preventDefault();         // 抓键时别弹右键菜单
   });
 
   $("btn-firewall").onclick = () => {

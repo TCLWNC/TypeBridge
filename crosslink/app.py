@@ -164,13 +164,22 @@ class CrossLinkApp:
             self.hub.broadcast({"type": "hotkey", "spec": "", "ok": True})
             return
         mode = str(self.cfg.get("voice_hotkey_mode") or "hold")
-        hk = HotkeyThread(spec, self.hub.voice_hotkey_press, log=self._log,
-                          mode=mode, on_release=self.hub.voice_hotkey_release)
+        # 鼠标中键/侧键注册不了 RegisterHotKey，走全局鼠标钩子那条路
+        from . import mousekey
+        if mousekey.is_mouse_spec(spec):
+            hk = mousekey.MouseHotkeyThread(
+                spec, self.hub.voice_hotkey_press, log=self._log,
+                mode=mode, on_release=self.hub.voice_hotkey_release)
+            shown = mousekey.pretty(spec)
+        else:
+            hk = HotkeyThread(spec, self.hub.voice_hotkey_press, log=self._log,
+                              mode=mode, on_release=self.hub.voice_hotkey_release)
+            shown = pretty(spec)
         hk.start()
         self._hotkey = hk
         self._log("语音热键：%s（%s）"
-                  % (pretty(spec), "按住说话" if mode == "hold" else "按一下开始"))
-        self.hub.broadcast({"type": "hotkey", "spec": pretty(spec),
+                  % (shown, "按住说话" if mode == "hold" else "按一下开始"))
+        self.hub.broadcast({"type": "hotkey", "spec": shown,
                             "mode": mode, "ok": True})
 
     # -- 服务 --------------------------------------------------------------
@@ -700,6 +709,28 @@ class CrossLinkApp:
             pass
 
 
+_INSTANCE_MUTEX = None
+
+
+def _claim_single_instance() -> bool:
+    """同一个用户只让跑一份；已经有一份就返回 False。
+
+    为什么需要：两份程序各自在内存里存着一份设置，谁最后退出谁把
+    config.json 覆盖一遍，用户刚改的设置就被旧值顶回去了。
+    """
+    global _INSTANCE_MUTEX
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        kernel32.CreateMutexW.restype = ctypes.c_void_p
+        _INSTANCE_MUTEX = kernel32.CreateMutexW(None, False,
+                                                "Local\\TypeBridge-SingleInstance")
+        ERROR_ALREADY_EXISTS = 183
+        return kernel32.GetLastError() != ERROR_ALREADY_EXISTS
+    except Exception:                     # noqa: BLE001
+        return True                       # 拿不到互斥体就别拦着用户用
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     # 诊断开关：CROSSLINK_TRACE=1 时每 10 秒把所有线程的 Python 调用栈写进文件，
@@ -766,6 +797,11 @@ def main(argv: list[str] | None = None) -> int:
             return selftest_main()
         index += 1
 
+    # 只允许一个实例：两个实例会各自持一份设置内存，退出时互相覆盖，
+    # 表现就是"设置每次重启都得重设一遍"；端口上也会抢。
+    if not headless and not _claim_single_instance():
+        print("TypeBridge 已经在运行了，这次就不重复启动了。", flush=True)
+        return 0
     app = CrossLinkApp(cfg, headless=headless)
     if tray_start:
         # 托盘常驻：窗口照样创建，只是先藏着。这样点托盘「显示窗口」出来的

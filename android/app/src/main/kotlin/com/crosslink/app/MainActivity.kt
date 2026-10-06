@@ -63,6 +63,24 @@ class MainActivity : Activity() {
     private var enterAfter = false
     private val device: String = (Build.MODEL ?: "手机").ifBlank { "手机" }
 
+    // 设置存本地：以前 liveMode / enterAfter 只放在内存里，
+    // App 一重启就回到默认值，用户每次都得重设一遍。
+    private fun prefs() = getSharedPreferences("crosslink", MODE_PRIVATE)
+
+    private fun loadSettings() {
+        runCatching {
+            liveMode = prefs().getBoolean("live_mode", true)
+            enterAfter = prefs().getBoolean("enter_after", false)
+        }
+    }
+
+    private fun saveSettings() {
+        runCatching {
+            prefs().edit().putBoolean("live_mode", liveMode)
+                .putBoolean("enter_after", enterAfter).apply()
+        }
+    }
+
     private lateinit var root: LinearLayout
     private lateinit var input: EditText
     private lateinit var counter: TextView
@@ -119,6 +137,7 @@ class MainActivity : Activity() {
         I18n.lang = runCatching {
             getSharedPreferences("crosslink", MODE_PRIVATE).getString("lang", null)
         }.getOrNull() ?: I18n.defaultLang()
+        loadSettings()
         try {
             buildShell()
         } catch (e: Throwable) {
@@ -376,7 +395,7 @@ class MainActivity : Activity() {
         }
         val swAuto = Switch(this).apply {
             isChecked = enterAfter
-            setOnCheckedChangeListener { _, v -> enterAfter = v }
+            setOnCheckedChangeListener { _, v -> enterAfter = v; saveSettings() }
         }
         opt.addView(swAuto)
         // 英文文案更长，给它一个上限并允许省略号，别把右边的「立即搜索」挤出屏幕
@@ -434,7 +453,7 @@ class MainActivity : Activity() {
         }
         setRow.addView(Switch(this).apply {
             isChecked = enterAfter
-            setOnCheckedChangeListener { _, v -> enterAfter = v }
+            setOnCheckedChangeListener { _, v -> enterAfter = v; saveSettings() }
         })
         setRow.addView(label("发送后自动回车", 14f, C_DIM))
         setRow.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
@@ -449,8 +468,8 @@ class MainActivity : Activity() {
         modeRow.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
         liveBtn = tabButton("即打即输")
         batchBtn = tabButton("编辑后发送")
-        liveBtn.setOnClickListener { liveMode = true; syncMode() }
-        batchBtn.setOnClickListener { liveMode = false; syncMode() }
+        liveBtn.setOnClickListener { liveMode = true; saveSettings(); syncMode() }
+        batchBtn.setOnClickListener { liveMode = false; saveSettings(); syncMode() }
         // 英文（Live typing / Edit then send）比中文长，写死宽度会把字挤出去，
         // 这里改成按比例分剩余空间，两边都拿得到位置
         modeRow.addView(liveBtn, LinearLayout.LayoutParams(0, dp(40), 1f))

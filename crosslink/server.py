@@ -37,6 +37,16 @@ MIME = {
 }
 
 
+def hotkey_label(spec: str) -> str:
+    """给界面看的键名：键盘走 hotkey.pretty，鼠标走 mousekey.pretty。"""
+    from . import mousekey
+    from .hotkey import pretty as key_pretty
+    text = str(spec or "")
+    if mousekey.is_mouse_spec(text):
+        return mousekey.pretty(text)
+    return key_pretty(text) if text else ""
+
+
 class Hub:
     """全局状态：在线设备、输入记录、设置，以及所有订阅者。"""
 
@@ -103,16 +113,17 @@ class Hub:
                 self.injector.restore_clipboard = bool(value)
             elif key in cfg:
                 cfg[key] = bool(value) if isinstance(cfg[key], bool) else value
-        self.save()
+        # 只把这次真正改到的键写下去（合并写，不至于把别的键覆盖成旧值）
+        self.save(list(changed.keys()))
         if "autostart" in changed:
             from . import winapi
             winapi.set_autostart(bool(cfg["autostart"]))
         self.on_change()
         self.broadcast({"type": "settings", "state": self.state(self.mobile_url)})
 
-    def save(self) -> None:
+    def save(self, keys: list[str] | None = None) -> None:
         from .config import save as save_cfg
-        save_cfg(self.cfg)
+        save_cfg(self.cfg, keys)
 
     def quit_app(self) -> None:
         if self.on_quit:
@@ -308,7 +319,7 @@ class Hub:
             "lang": self.cfg.get("lang", ""),
             # 语音输入的状态：模型在不在、热键是什么、当前是否在收音
             "voice": {"ready": asr.model_ready(),
-                      "hotkey": self.cfg.get("voice_hotkey", ""),
+                      "hotkey": hotkey_label(self.cfg.get("voice_hotkey", "")),
                       "hotkey_mode": self.cfg.get("voice_hotkey_mode", "hold"),
                       "listening": bool(self.voice.recording),
                       # idle / listening / recognizing —— 界面照这个显示状态
@@ -806,6 +817,10 @@ class Handler(BaseHTTPRequestHandler):
 
 def create_server(hub: Hub, port: int) -> ThreadingHTTPServer:
     handler = type("BoundHandler", (Handler,), {"hub": hub, "mobile_url": []})
+    # 关键：**不许**共用地址。Windows 上 SO_REUSEADDR 会让第二个实例
+    # 也绑上同一个端口（两个进程同时"占着"8788），手机上连到哪个全看运气，
+    # 两个实例各自的设置内存还会互相覆盖。
+    ThreadingHTTPServer.allow_reuse_address = False
     httpd = ThreadingHTTPServer(("0.0.0.0", port), handler)
     httpd.daemon_threads = True
     hub.server = httpd
@@ -819,7 +834,13 @@ def local_urls(port: int) -> list[str]:
 
 def port_available(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # 探测端口有没有被占：Windows 下必须用 SO_EXCLUSIVEADDRUSE，
+        # 用 SO_REUSEADDR 的话"别人正在监听"也会 bind 成功，探测等于白做。
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            try:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            except OSError:
+                pass
         try:
             sock.bind(("0.0.0.0", port))
             return True
