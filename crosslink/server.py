@@ -102,15 +102,24 @@ class Hub:
         for key, value in changed.items():
             if key == "inject":
                 self.injector.enabled = bool(value)
+                # 注意：这几个键以前只改了"运行时对象"，忘了同步回 cfg，
+                # 于是写盘时写的还是旧值 —— 用户重启后「键盘注入 / 输入方式 /
+                # 字间延迟 / 还原剪贴板」就全被还原了。这里必须两边都写。
+                cfg["inject"] = bool(value)
             elif key == "method":
-                self.injector.method = "clipboard" if value == "clipboard" else "direct"
+                method = "clipboard" if value == "clipboard" else "direct"
+                self.injector.method = method
+                cfg["method"] = method
             elif key == "delay_ms":
                 try:
-                    self.injector.delay_ms = max(0, min(int(value), 200))
+                    delay = max(0, min(int(value), 200))
+                    self.injector.delay_ms = delay
+                    cfg["delay_ms"] = delay
                 except (TypeError, ValueError):
                     pass
             elif key == "restore_clipboard":
                 self.injector.restore_clipboard = bool(value)
+                cfg["restore_clipboard"] = bool(value)
             elif key in cfg:
                 cfg[key] = bool(value) if isinstance(cfg[key], bool) else value
         # 只把这次真正改到的键写下去（合并写，不至于把别的键覆盖成旧值）
