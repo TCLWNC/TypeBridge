@@ -5,7 +5,12 @@
   let sent = "";              // 已经镜像到电脑的文字（即打即输的基线）
   let acked = "";             // 电脑端确认收到的文字（兜底重发用）
   let lastSent = "";          // 最近一次完整发送，供「还原」用
-  let mode = "live";
+  // 发送模式也得存下来：以前每次重开页面都回到"即打即输"，
+  // 用户改好的"编辑后发送"就丢了。
+  let mode = (() => {
+    try { return localStorage.getItem("crosslink.mode") === "batch" ? "batch" : "live"; }
+    catch (e) { return "live"; }
+  })();
   let timer = null;
   // 这个开关是“这台手机自己的发送习惯”，存本地，重开页面仍然有效
   let settings = {
@@ -260,11 +265,22 @@
 
   /* ---------------- 模式 ---------------- */
   const seg = $("mode");
+
+  // 打开页面时，按上次选的那个模式把界面摆正（否则显示和实际对不上）
+  function paintMode() {
+    seg.querySelectorAll("button").forEach((x) => {
+      x.classList.toggle("active", x.dataset.v === mode);
+    });
+    sent = $("input").value;
+    $("btn-send").textContent = mode === "batch" ? "发送" : "输入";
+  }
+
   seg.querySelectorAll("button").forEach((b) => {
     b.onclick = () => {
       seg.querySelectorAll("button").forEach((x) => x.classList.remove("active"));
       b.classList.add("active");
       mode = b.dataset.v;
+      try { localStorage.setItem("crosslink.mode", mode); } catch (e) { /* 忽略 */ }
       if (mode === "batch") {
         sent = $("input").value;
         $("btn-send").textContent = "发送";
@@ -387,6 +403,7 @@
   } catch (e) { /* 忽略 */ }
 
   /* ---------------- 启动 ---------------- */
+  paintMode();          // 按存下来的模式把界面摆正
   hello("");
   window.addEventListener("pagehide", () => {
     if (sid) navigator.sendBeacon("/api/leave", new Blob([JSON.stringify({ sid })],
